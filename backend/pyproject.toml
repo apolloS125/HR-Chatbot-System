@@ -1,0 +1,17 @@
+[project]
+name = "hr-chatbot-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "asyncpg>=0.30,<1",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
