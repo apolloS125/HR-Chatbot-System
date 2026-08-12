@@ -1,6 +1,7 @@
 from datetime import date
 
-from app.main import announcement_message, business_days, parse_leave_command
+from app.chatbot import business_days, parse_leave_command
+from app.line_client import announcement_message
 
 
 def test_business_days_excludes_weekend():
