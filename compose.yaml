@@ -1,23 +1,43 @@
 services:
-  db:
-    image: postgres:17-alpine
+  mongodb:
+    image: mongo:8
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-hr_chatbot}
-      POSTGRES_USER: ${POSTGRES_USER:-hr}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hr}
+      MONGO_INITDB_DATABASE: hr_chatbot
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
       interval: 3s
       timeout: 3s
       retries: 15
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - mongo_data:/data/db
+
+  redis:
+    image: redis:8-alpine
+
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.28.2
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: none
+      CLUSTER_HOSTNAME: node1
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:3.81
+    command: server -dir=/data -s3 -s3.port=8333
+    volumes:
+      - seaweed_data:/data
 
   backend:
     build: ./backend
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-hr}:${POSTGRES_PASSWORD:-hr}@db:5432/${POSTGRES_DB:-hr_chatbot}
+      MONGODB_URL: mongodb://mongodb:27017
+      MONGODB_DATABASE: hr_chatbot
+      REDIS_URL: redis://redis:6379/0
+      WEAVIATE_URL: http://weaviate:8080
+      SEAWEED_MASTER_URL: http://seaweedfs:9333
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
       LINE_LOGIN_CHANNEL_ID: ${LINE_LOGIN_CHANNEL_ID:-}
       LINE_LOGIN_CHANNEL_SECRET: ${LINE_LOGIN_CHANNEL_SECRET:-}
@@ -29,12 +49,16 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
     depends_on:
-      db:
+      mongodb:
         condition: service_healthy
+      redis:
+        condition: service_started
+      weaviate:
+        condition: service_started
+      seaweedfs:
+        condition: service_started
     ports:
       - "8000:8000"
-    volumes:
-      - uploads_data:/app/uploads
 
   frontend:
     build: ./frontend
@@ -52,5 +76,6 @@ services:
       - "3000:3000"
 
 volumes:
-  postgres_data:
-  uploads_data:
+  mongo_data:
+  weaviate_data:
+  seaweed_data:

@@ -2,19 +2,16 @@ import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-import asyncpg
 import httpx
 from fastapi import HTTPException
 
 from .core import LINE_CHANNEL_ACCESS_TOKEN
-
 
 def announcement_date(value: datetime | None) -> str:
     value = value or datetime.now(ZoneInfo("Asia/Bangkok"))
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(ZoneInfo("Asia/Bangkok")).strftime("%d/%m/%Y · %H:%M น.")
-
 
 def announcement_bubble(
     title: str,
@@ -124,7 +121,6 @@ def announcement_bubble(
         },
     }
 
-
 def announcement_message(
     title: str,
     body: str,
@@ -136,8 +132,7 @@ def announcement_message(
         "contents": announcement_bubble(title, body, published_at),
     }
 
-
-def announcement_carousel(rows: list[asyncpg.Record]) -> dict[str, object]:
+def announcement_carousel(rows: list[dict[str, object]]) -> dict[str, object]:
     bubbles = [
         announcement_bubble(row["title"], row["body"], row["published_at"])
         for row in rows
@@ -147,7 +142,6 @@ def announcement_carousel(rows: list[asyncpg.Record]) -> dict[str, object]:
         "altText": "ประกาศล่าสุดจากบริษัท",
         "contents": bubbles[0] if len(bubbles) == 1 else {"type": "carousel", "contents": bubbles},
     }
-
 
 async def reply_line(reply_token: str, message: str | dict[str, object]) -> None:
     if not LINE_CHANNEL_ACCESS_TOKEN:
@@ -160,7 +154,6 @@ async def reply_line(reply_token: str, message: str | dict[str, object]) -> None
             json={"replyToken": reply_token, "messages": [line_message]},
         )
         response.raise_for_status()
-
 
 async def multicast_line(user_ids: list[str], message: dict[str, object]) -> None:
     if not LINE_CHANNEL_ACCESS_TOKEN:
