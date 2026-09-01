@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import HTTPException
+from pymongo.errors import DuplicateKeyError
 
 
 def business_days(start: date, end: date) -> int:
@@ -24,5 +25,13 @@ async def submit_leave(database, employee_code: str, leave_type: str, start: dat
         if existing:
             return existing["_id"], existing["days"]
     request_id = f"LR-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
-    await database.leave_requests.insert_one({"_id": request_id, "employee_code": employee_code, "leave_type": leave_type, "start_date": start.isoformat(), "end_date": end.isoformat(), "days": days, "reason": reason, "attachment_url": attachment_url, "source_event_id": source_event_id, "status": "pending", "created_at": datetime.now(timezone.utc)})
+    document = {"_id": request_id, "employee_code": employee_code, "leave_type": leave_type, "start_date": start.isoformat(), "end_date": end.isoformat(), "days": days, "reason": reason, "attachment_url": attachment_url, "status": "pending", "created_at": datetime.now(timezone.utc)}
+    if source_event_id:
+        document["source_event_id"] = source_event_id
+    try:
+        await database.leave_requests.insert_one(document)
+    except DuplicateKeyError:
+        existing = await database.leave_requests.find_one({"source_event_id": source_event_id}) if source_event_id else None
+        if not existing: raise
+        return existing["_id"], existing["days"]
     return request_id, days

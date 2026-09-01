@@ -2,7 +2,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from .core import PUBLIC_BASE_URL, cache, db, require_admin, sha256
@@ -14,6 +15,10 @@ router = APIRouter(prefix="/api/admin", dependencies=[Depends(require_admin)])
 
 def employee_view(item):
     return {"id": item["_id"], "employee_code": item["_id"], "name": item["name"], "work_email": item["work_email"], "role": item["role"], "active": item["active"], "line_linked": bool(item.get("line_user_id")), "line_linked_at": item.get("line_linked_at")}
+
+
+def document_view(item):
+    return {"id": item["_id"], **{key: value for key, value in item.items() if key != "_id"}}
 
 
 @router.get("/summary")
@@ -62,7 +67,7 @@ async def delete_employee(employee_id: str, database=Depends(db), redis=Depends(
 
 @router.get("/announcements")
 async def list_announcements(database=Depends(db)):
-    return [{**item, "id": item.pop("_id")} async for item in database.announcements.find({}).sort("published_at", -1).limit(20)]
+    return [document_view(item) async for item in database.announcements.find({}).sort("published_at", -1).limit(20)]
 
 
 @router.post("/announcements", status_code=201)
@@ -85,11 +90,16 @@ async def list_leaves(database=Depends(db)):
 
 @router.post("/leaves/{leave_id}/decision")
 async def decide_leave(leave_id: str, data: LeaveDecision, database=Depends(db), redis=Depends(cache)):
-    leave = await database.leave_requests.find_one({"_id": leave_id, "status": "pending"})
+    final = {"status": data.decision, "decided_by": data.decided_by, "decided_at": datetime.now(timezone.utc)}
+    if data.decision == "rejected":
+        leave = await database.leave_requests.find_one_and_update({"_id": leave_id, "status": "pending"}, {"$set": final}, return_document=ReturnDocument.AFTER)
+        if not leave: raise HTTPException(status_code=409, detail="leave request was already decided or not found")
+        await redis.delete("summary"); return {"ok": True}
+    leave = await database.leave_requests.find_one_and_update({"_id": leave_id, "status": "pending"}, {"$set": {"status": "processing"}}, return_document=ReturnDocument.AFTER)
     if not leave: raise HTTPException(status_code=409, detail="leave request was already decided or not found")
-    if data.decision == "approved":
-        employee = await database.employees.find_one({"_id": leave["employee_code"]})
-        if not employee or employee["balances"].get(leave["leave_type"], 0) < leave["days"]: raise HTTPException(status_code=409, detail="leave balance is insufficient")
-        await database.employees.update_one({"_id": leave["employee_code"]}, {"$inc": {f"balances.{leave['leave_type']}": -leave["days"]}})
-    await database.leave_requests.update_one({"_id": leave_id}, {"$set": {"status": data.decision, "decided_by": data.decided_by, "decided_at": datetime.now(timezone.utc)}})
+    balance = await database.employees.update_one({"_id": leave["employee_code"], f"balances.{leave['leave_type']}": {"$gte": leave["days"]}}, {"$inc": {f"balances.{leave['leave_type']}": -leave["days"]}})
+    if balance.modified_count != 1:
+        await database.leave_requests.update_one({"_id": leave_id, "status": "processing"}, {"$set": {"status": "pending"}})
+        raise HTTPException(status_code=409, detail="leave balance is insufficient")
+    await database.leave_requests.update_one({"_id": leave_id, "status": "processing"}, {"$set": final})
     await redis.delete("summary"); return {"ok": True}

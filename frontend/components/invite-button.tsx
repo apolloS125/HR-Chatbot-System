@@ -5,7 +5,7 @@ import { issueLink, type InviteState } from "../app/actions";
 
 const initialState: InviteState = { link: "", error: "" };
 
-export function InviteButton({ employeeId }: { employeeId: number }) {
+export function InviteButton({ employeeId }: { employeeId: string }) {
   const [state, action, pending] = useActionState(issueLink, initialState);
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">

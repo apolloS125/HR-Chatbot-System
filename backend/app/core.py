@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import hashlib
 import hmac
 import os
@@ -10,6 +11,8 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from redis.asyncio import Redis
+
+from .vector_store import ensure_policy_index
 
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
 MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "hr_chatbot")
@@ -41,9 +44,9 @@ async def lifespan(app: FastAPI):
     await app.state.mongo.faqs.update_one({"_id": "work-hours"}, {"$setOnInsert": {"keyword": "เวลาทำงาน", "question": "บริษัททำงานกี่โมง", "answer": "เวลาทำงานปกติคือ 09:00–18:00 น. วันจันทร์ถึงวันศุกร์", "active": True}}, upsert=True)
     # Weaviate is a rebuildable index, never source of truth.
     try:
-        async with httpx.AsyncClient(timeout=3) as client:
-            await client.post(f"{WEAVIATE_URL}/v1/schema", json={"class": "HrPolicy", "vectorizer": "none", "properties": [{"name": "mongoId", "dataType": ["text"]}, {"name": "answer", "dataType": ["text"]}]})
-            await client.post(f"{WEAVIATE_URL}/v1/objects", json={"class": "HrPolicy", "properties": {"mongoId": "work-hours", "answer": "เวลาทำงานปกติคือ 09:00–18:00 น. วันจันทร์ถึงวันศุกร์"}})
+        policies = [policy async for policy in app.state.mongo.faqs.find({"active": True})]
+        async with httpx.AsyncClient(base_url=WEAVIATE_URL, timeout=3) as client:
+            await ensure_policy_index(client, policies)
     except httpx.HTTPError:
         pass
     yield
@@ -95,8 +98,33 @@ async def seaweed_upload(name: str, content: bytes, content_type: str) -> str:
     return assigned["fid"]
 
 
+async def seaweed_location(fid: str) -> str:
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(f"{SEAWEED_MASTER_URL}/dir/lookup", params={"volumeId": fid.partition(",")[0]})
+        response.raise_for_status()
+        return response.json()["locations"][0]["url"]
+
+
 async def seaweed_read(fid: str) -> bytes:
+    volume_url = await seaweed_location(fid)
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.get(f"http://seaweedfs:9333/{fid}")
+        response = await client.get(f"http://{volume_url}/{fid}")
         response.raise_for_status()
         return response.content
+
+
+async def seaweed_delete(fid: str) -> None:
+    volume_url = await seaweed_location(fid)
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.delete(f"http://{volume_url}/{fid}")
+        response.raise_for_status()
+
+
+async def storage_health() -> None:
+    async with httpx.AsyncClient(timeout=3) as client:
+        weaviate, seaweed = await asyncio.gather(
+            client.get(f"{WEAVIATE_URL}/v1/.well-known/ready"),
+            client.get(f"{SEAWEED_MASTER_URL}/cluster/status"),
+        )
+        weaviate.raise_for_status()
+        seaweed.raise_for_status()

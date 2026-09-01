@@ -3,8 +3,8 @@
 import type { FormEvent } from "react";
 
 export type Balance = { leave_type: string; remaining_days: string };
-export type Leave = { id: number; leave_type: string; start_date: string; end_date: string; days: string; reason: string; status: string; attachment_url?: string };
-export type Announcement = { id: number; title: string; body: string; published_at: string };
+export type Leave = { id: string; leave_type: string; start_date: string; end_date: string; days: string; reason: string; status: string; attachment_url?: string };
+export type Announcement = { id: string; title: string; body: string; published_at: string };
 export type LiffTab = "leave" | "balance" | "history" | "news";
 
 const labels: Record<string, string> = { vacation: "พักร้อน", sick: "ลาป่วย", personal: "ลากิจ", pending: "รออนุมัติ", approved: "อนุมัติแล้ว", rejected: "ไม่อนุมัติ" };

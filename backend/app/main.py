@@ -8,7 +8,7 @@ from .admin import router as admin_router
 from .auth import router as auth_router
 from .chatbot import router as chatbot_router
 from .liff import router as liff_router
-from .core import cache, db, lifespan
+from .core import cache, db, lifespan, storage_health
 
 app = FastAPI(title="HR Chatbot API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
@@ -26,4 +26,5 @@ app.include_router(admin_router)
 async def health(database=Depends(db), redis=Depends(cache)):
     await database.command("ping")
     await redis.ping()
-    return {"status": "ok"}
+    await storage_health()
+    return {"status": "ok", "services": ["mongodb", "redis", "weaviate", "seaweedfs"]}

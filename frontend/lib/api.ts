@@ -8,7 +8,7 @@ export type Summary = {
 };
 
 export type Employee = {
-  id: number;
+  id: string;
   employee_code: string;
   name: string;
   work_email: string;
@@ -18,7 +18,7 @@ export type Employee = {
 };
 
 export type Leave = {
-  id: number;
+  id: string;
   employee_code: string;
   name: string;
   leave_type: string;
@@ -30,7 +30,7 @@ export type Leave = {
 };
 
 export type Announcement = {
-  id: number;
+  id: string;
   title: string;
   body: string;
   published_at: string;

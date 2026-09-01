@@ -20,7 +20,7 @@ export function EmployeeForm() {
   );
 }
 
-export function DeleteEmployeeButton({ employeeId, name }: { employeeId: number; name: string }) {
+export function DeleteEmployeeButton({ employeeId, name }: { employeeId: string; name: string }) {
   return (
     <form action={deleteEmployee} onSubmit={(event) => {
       if (!window.confirm(`ลบ ${name} ถาวร รวมประวัติคำขอลาและข้อมูล LINE ใช่หรือไม่?`)) event.preventDefault();

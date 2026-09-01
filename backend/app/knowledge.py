@@ -1,17 +1,18 @@
 import httpx
 
 from .core import OPENAI_API_KEY, OPENAI_MODEL, WEAVIATE_URL
+from .vector_store import search_policy
 
 
 async def answer_policy(database, question: str) -> str | None:
-    async with httpx.AsyncClient(timeout=5) as client:
+    async with httpx.AsyncClient(base_url=WEAVIATE_URL, timeout=5) as client:
         try:
-            response = await client.post(f"{WEAVIATE_URL}/v1/graphql", json={"query": "{Get{HrPolicy(limit:1){mongoId answer}}}"})
-            rows = response.json().get("data", {}).get("Get", {}).get("HrPolicy", []) if response.is_success else []
-            if rows and (faq := await database.faqs.find_one({"_id": rows[0]["mongoId"], "active": True})):
+            mongo_id = await search_policy(client, question)
+            if mongo_id and (faq := await database.faqs.find_one({"_id": mongo_id, "active": True})):
                 return await _llm(question, faq["answer"])
         except httpx.HTTPError: pass
-    faq = await database.faqs.find_one({"active": True})
+    candidates = [faq async for faq in database.faqs.find({"active": True})]
+    faq = max((faq for faq in candidates if faq.get("keyword") and faq["keyword"].lower() in question.lower()), key=lambda value: len(value["keyword"]), default=None)
     return await _llm(question, faq["answer"]) if faq else None
 
 

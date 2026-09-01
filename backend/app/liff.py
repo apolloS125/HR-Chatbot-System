@@ -1,17 +1,23 @@
 import secrets
 from datetime import date
+from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from fastapi.responses import Response
 
-from .core import LINE_LOGIN_CHANNEL_ID, PUBLIC_BASE_URL, db, issue_liff_token, read_liff_token, seaweed_read, seaweed_upload
+from .core import LINE_LOGIN_CHANNEL_ID, PUBLIC_BASE_URL, db, issue_liff_token, read_liff_token, seaweed_delete, seaweed_read, seaweed_upload
 from .leaves import submit_leave
 from .schemas import LiffLeaveCreate, LiffSessionCreate
 
 router = APIRouter(prefix="/api/liff")
 ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png"}
+
+
+def document_view(item):
+    return {"id": item["_id"], **{key: value for key, value in item.items() if key != "_id"}}
 
 
 async def current_employee(authorization: Annotated[str | None, Header()] = None, database=Depends(db)):
@@ -38,12 +44,12 @@ async def balances(employee=Depends(current_employee)):
 
 @router.get("/leaves")
 async def leaves(employee=Depends(current_employee), database=Depends(db)):
-    return [{**item, "id": item.pop("_id")} async for item in database.leave_requests.find({"employee_code": employee["_id"]}).sort("created_at", -1)]
+    return [document_view(item) async for item in database.leave_requests.find({"employee_code": employee["_id"]}).sort("created_at", -1)]
 
 
 @router.get("/announcements")
 async def announcements(database=Depends(db)):
-    return [{**item, "id": item.pop("_id")} async for item in database.announcements.find({}).sort("published_at", -1).limit(20)]
+    return [document_view(item) async for item in database.announcements.find({}).sort("published_at", -1).limit(20)]
 
 
 @router.post("/attachments", status_code=201)
@@ -51,11 +57,17 @@ async def upload_attachment(file: Annotated[UploadFile, File()], employee=Depend
     if file.content_type not in ALLOWED_TYPES: raise HTTPException(status_code=415, detail="รองรับเฉพาะ PDF, JPG และ PNG")
     content = await file.read(10 * 1024 * 1024 + 1)
     if len(content) > 10 * 1024 * 1024: raise HTTPException(status_code=413, detail="ไฟล์ต้องไม่เกิน 10 MB")
-    fid = await seaweed_upload(file.filename or "file", content, file.content_type)
+    filename = Path(file.filename or "file").name
+    fid = await seaweed_upload(filename, content, file.content_type)
     file_id = f"F-{secrets.token_hex(8)}"
-    await database.files.insert_one({"_id": file_id, "employee_code": employee["_id"], "fid": fid, "name": file.filename, "content_type": file.content_type})
+    try:
+        await database.files.insert_one({"_id": file_id, "employee_code": employee["_id"], "fid": fid, "name": filename, "content_type": file.content_type})
+    except Exception:
+        try: await seaweed_delete(fid)
+        except httpx.HTTPError: pass
+        raise
     token = authorization.removeprefix("Bearer ") if authorization else ""
-    return {"url": f"{PUBLIC_BASE_URL}/api/liff/attachments/{file_id}?token={token}", "name": file.filename}
+    return {"url": f"{PUBLIC_BASE_URL}/api/liff/attachments/{file_id}?token={token}", "name": filename}
 
 
 @router.get("/attachments/{file_id}")
@@ -64,7 +76,7 @@ async def attachment(file_id: str, token: str, database=Depends(db)):
     employee = await database.employees.find_one({"line_user_id": user_id, "active": True}) if user_id else None
     file = await database.files.find_one({"_id": file_id, "employee_code": employee["_id"]}) if employee else None
     if not file: raise HTTPException(status_code=404, detail="ไม่พบเอกสาร")
-    return Response(await seaweed_read(file["fid"]), media_type=file["content_type"], headers={"Content-Disposition": f'attachment; filename="{file["name"]}"'})
+    return Response(await seaweed_read(file["fid"]), media_type=file["content_type"], headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file['name'])}"})
 
 
 @router.post("/leaves", status_code=201)
