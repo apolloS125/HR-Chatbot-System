@@ -24,11 +24,17 @@ services:
       LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
       LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN:-}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me}
+      LIFF_SESSION_SECRET: ${LIFF_SESSION_SECRET:-change-me}
+      LIFF_ORIGIN: ${LIFF_ORIGIN:-http://localhost:3000}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - uploads_data:/app/uploads
 
   frontend:
     build: ./frontend
@@ -38,6 +44,8 @@ services:
       HR_USERNAME: ${HR_USERNAME:-hr}
       HR_PASSWORD: ${HR_PASSWORD:-change-me}
       HR_DISPLAY_NAME: ${HR_DISPLAY_NAME:-HR}
+      NEXT_PUBLIC_LIFF_ID: ${NEXT_PUBLIC_LIFF_ID:-}
+      NEXT_PUBLIC_BACKEND_URL: ${PUBLIC_BACKEND_URL:-http://localhost:8000}
     depends_on:
       - backend
     ports:
@@ -45,3 +53,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

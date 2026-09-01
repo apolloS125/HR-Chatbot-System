@@ -1,6 +1,6 @@
 # HR Chatbot via LINE Official Account
 
-MVP ที่รันได้จริงตามข้อเสนอโครงงาน: พนักงานยืนยันตัวด้วย LINE Login, ใช้แชทดูวันลาคงเหลือ/ประกาศ/FAQ/ส่งคำขอลา และ HR ออกลิงก์เชื่อมบัญชีกับอนุมัติการลาผ่าน Dashboard
+MVP: พนักงานยืนยันตัวด้วย LINE Login, ใช้ LINE OA ถามนโยบาย/ดูวันลา และใช้ LIFF Mini App สำหรับขอลา ดูสิทธิ์ ประวัติ เอกสารแนบ และประกาศ. HR จัดการข้อมูลผ่าน Dashboard.
 
 ## เริ่มใช้งาน
 
@@ -28,6 +28,8 @@ MVP ที่รันได้จริงตามข้อเสนอโค�
 - Messaging API webhook URL: `https://<โดเมน-backend>/line/webhook`
 - ใส่ Channel ID/Secret/Access token ลง `.env`
 - ตั้ง `PUBLIC_BASE_URL` เป็น URL HTTPS ของ backend ที่ LINE เข้าถึงได้
+- สร้าง LIFF app ใน LINE Login channel, ตั้ง Endpoint URL เป็น `https://<โดเมน-frontend>/liff`, แล้วใส่ `NEXT_PUBLIC_LIFF_ID`
+- ตั้ง `PUBLIC_BACKEND_URL` เป็น URL HTTPS ของ backend ที่เบราว์เซอร์เข้าถึงได้ และ `LIFF_ORIGIN` เป็น URL frontend
 
 จาก Dashboard กด **ออกลิงก์ LINE** ที่พนักงาน ส่งลิงก์นั้นให้เจ้าตัว และให้เปิดภายใน 30 นาที ลิงก์ใช้ได้ครั้งเดียว หลัง LINE Login สำเร็จ `LINE user ID` จะถูกผูกกับรหัสพนักงาน และ chatbot จะอนุญาตเฉพาะพนักงานที่ยัง Active
 
@@ -40,7 +42,7 @@ MVP ที่รันได้จริงตามข้อเสนอโค�
 ขอลา พักร้อน 2026-08-20 2026-08-21 ธุระครอบครัว
 ```
 
-คำถามอื่นจะค้นจากตาราง `faqs` ก่อน ระบบตั้งใจยังไม่เรียก LLM/RAG จนกว่าจะมีเอกสารนโยบายบริษัทและ API key จริง เพื่อไม่ให้ตอบข้อมูล HR ที่แต่งขึ้นเอง
+คำถามนโยบายค้นจาก `faqs` ก่อน. ถ้าตั้ง `OPENAI_API_KEY` ระบบจะให้ LLM เรียบเรียงคำตอบจาก FAQ ที่พบเท่านั้น; ถ้าไม่ตั้ง key จะตอบข้อความ FAQ ตรง ๆ.
 
 ## ทดสอบ backend
 
@@ -56,4 +58,4 @@ API สำหรับทดสอบและดู schema อยู่ที�
 
 - Dashboard ใช้ HTTP Basic Auth และ backend ใช้ admin API key เหมาะกับต้นแบบภายในเท่านั้น ก่อน production ควรเปลี่ยนเป็น Company SSO
 - วันลานับเฉพาะจันทร์–ศุกร์ ยังไม่หักวันหยุดบริษัท
-- ยังไม่รวมไฟล์แนบ, Rich Menu/Flex Message, push notification, RAG และ Langfuse
+- เอกสารแนบเก็บ local volume ของ backend: เหมาะกับ MVP; production ควรเปลี่ยนเป็น object storage และ URL ที่มีสิทธิ์เข้าถึง

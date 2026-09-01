@@ -34,6 +34,7 @@ export async function createEmployee(_: EmployeeState, formData: FormData): Prom
         role: formData.get("role"),
       }),
     });
+    revalidatePath("/employees");
     revalidatePath("/");
     return { error: "" };
   } catch (error) {
@@ -46,6 +47,7 @@ export async function deleteEmployee(formData: FormData) {
   await api(`/api/admin/employees/${formData.get("employee_id")}`, {
     method: "DELETE",
   });
+  revalidatePath("/employees");
   revalidatePath("/");
 }
 
@@ -70,6 +72,7 @@ export async function decideLeave(formData: FormData) {
       decided_by: process.env.HR_DISPLAY_NAME ?? "HR",
     }),
   });
+  revalidatePath("/leaves");
   revalidatePath("/");
 }
 
@@ -87,6 +90,7 @@ export async function createAnnouncement(
         body: formData.get("body"),
       }),
     });
+    revalidatePath("/announcements");
     revalidatePath("/");
     return {
       message: data.recipient_count
@@ -95,6 +99,7 @@ export async function createAnnouncement(
       error: "",
     };
   } catch (error) {
+    revalidatePath("/announcements");
     revalidatePath("/");
     return {
       message: "",

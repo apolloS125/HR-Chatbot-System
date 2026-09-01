@@ -22,3 +22,15 @@ class LeaveDecision(BaseModel):
 class AnnouncementCreate(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     body: str = Field(min_length=1, max_length=1500)
+
+
+class LiffSessionCreate(BaseModel):
+    id_token: str = Field(min_length=1)
+
+
+class LiffLeaveCreate(BaseModel):
+    leave_type: Literal["vacation", "sick", "personal"]
+    start_date: str
+    end_date: str
+    reason: str = Field(default="-", max_length=1500)
+    attachment_url: str | None = Field(default=None, max_length=1000)

@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -16,6 +17,9 @@ LINE_LOGIN_CHANNEL_SECRET = os.getenv("LINE_LOGIN_CHANNEL_SECRET", "")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "change-me")
+LIFF_SESSION_SECRET = os.getenv("LIFF_SESSION_SECRET", ADMIN_API_KEY)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 
 @asynccontextmanager
@@ -49,3 +53,21 @@ def valid_line_signature(body: bytes, signature: str | None) -> bool:
         hmac.new(LINE_CHANNEL_SECRET.encode(), body, hashlib.sha256).digest()
     ).decode()
     return hmac.compare_digest(expected, signature)
+
+
+def issue_liff_token(line_user_id: str) -> str:
+    payload = base64url(f"{line_user_id}:{int(time.time()) + 3600}".encode())
+    signature = base64url(hmac.new(LIFF_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).digest())
+    return f"{payload}.{signature}"
+
+
+def read_liff_token(token: str) -> str | None:
+    try:
+        payload, signature = token.split(".", 1)
+        expected = base64url(hmac.new(LIFF_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).digest())
+        line_user_id, expires_at = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)).decode().rsplit(":", 1)
+        if not hmac.compare_digest(signature, expected) or int(expires_at) < time.time():
+            return None
+        return line_user_id
+    except (ValueError, UnicodeDecodeError):
+        return None

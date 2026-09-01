@@ -1,12 +1,13 @@
 import json
-from datetime import date, timedelta
-from decimal import Decimal
+from datetime import date
 from typing import Annotated
 
 import asyncpg
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from .core import valid_line_signature
+from .knowledge import answer_policy
+from .leaves import business_days, submit_leave
 from .line_client import announcement_carousel, reply_line
 
 
@@ -15,25 +16,16 @@ LEAVE_TYPES = {"พักร้อน": "vacation", "ป่วย": "sick", "ก
 LEAVE_LABELS = {value: key for key, value in LEAVE_TYPES.items()}
 
 
-def business_days(start: date, end: date) -> int:
-    if end < start:
-        raise ValueError("end date is before start date")
-    return sum(
-        1 for offset in range((end - start).days + 1)
-        if (start + timedelta(days=offset)).weekday() < 5
-    )
-
-
 def parse_leave_command(text: str) -> tuple[str, date, date, str] | None:
     parts = text.strip().split(maxsplit=4)
-    if len(parts) < 4 or parts[0] != "ขอลา" or parts[1] not in LEAVE_TYPES:
+    if len(parts) < 3 or parts[0] != "ขอลา" or parts[1] not in LEAVE_TYPES:
         return None
     try:
         start = date.fromisoformat(parts[2])
-        end = date.fromisoformat(parts[3])
+        end = date.fromisoformat(parts[3]) if len(parts) >= 4 else start
     except ValueError:
         return None
-    reason = parts[4].strip() if len(parts) == 5 else "-"
+    reason = parts[4].strip() if len(parts) == 5 else ""
     if end < start:
         return None
     return LEAVE_TYPES[parts[1]], start, end, reason
@@ -95,41 +87,23 @@ async def handle_message(
 
     if normalized == "ประกาศ":
         rows = await pool.fetch(
-            "SELECT title, body FROM announcements WHERE published_at <= now() ORDER BY published_at DESC LIMIT 3"
+            "SELECT title, body, published_at FROM announcements WHERE published_at <= now() ORDER BY published_at DESC LIMIT 3"
         )
         return announcement_carousel(rows) if rows else "ยังไม่มีประกาศ"
 
     leave = parse_leave_command(normalized)
     if leave:
         leave_type, start, end, reason = leave
-        days = business_days(start, end)
-        if days == 0:
-            return "ช่วงวันที่เลือกไม่มีวันทำงาน"
-        async with pool.acquire() as conn, conn.transaction():
-            remaining = await conn.fetchval(
-                "SELECT remaining_days FROM leave_balances WHERE employee_id = $1 AND leave_type = $2 FOR UPDATE",
-                employee["id"], leave_type,
+        try:
+            request_id, days = await submit_leave(
+                pool, employee["id"], leave_type, start, end, reason, event_id,
             )
-            if remaining is None or Decimal(remaining) < days:
-                return "วันลาคงเหลือไม่เพียงพอ"
-            request_id = await conn.fetchval(
-                """
-                INSERT INTO leave_requests
-                    (employee_id, leave_type, start_date, end_date, days, reason, source_event_id)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT (source_event_id) DO UPDATE
-                SET source_event_id = EXCLUDED.source_event_id
-                RETURNING id
-                """,
-                employee["id"], leave_type, start, end, days, reason, event_id,
-            )
+        except HTTPException as error:
+            return str(error.detail)
         return f"ส่งคำขอลา #{request_id} แล้ว จำนวน {days} วัน รอ HR อนุมัติ"
 
-    faq = await pool.fetchval(
-        "SELECT answer FROM faqs WHERE active AND $1 ILIKE '%' || keyword || '%' ORDER BY length(keyword) DESC LIMIT 1",
-        normalized,
-    )
-    return faq or "ไม่พบคำตอบในฐานข้อมูล HR\n\n" + menu()
+    answer = await answer_policy(pool, normalized)
+    return answer or "ไม่พบคำตอบในฐานข้อมูล HR\n\n" + menu()
 
 
 def menu() -> str:

@@ -133,7 +133,10 @@ async def create_announcement(
     )
     try:
         if recipients:
-            await multicast_line(recipients, announcement_message(data.title, data.body))
+            await multicast_line(
+                recipients,
+                announcement_message(data.title, data.body, announcement["published_at"]),
+            )
     except httpx.HTTPStatusError as error:
         raise HTTPException(
             status_code=502,

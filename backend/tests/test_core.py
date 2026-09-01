@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from app.chatbot import business_days, parse_leave_command
 from app.line_client import announcement_message
@@ -16,13 +16,26 @@ def test_parse_leave_command():
         "ไปต่างจังหวัด",
     )
 
+def test_parse_leave_command_with_only_start_date():
+    assert parse_leave_command("ขอลา ป่วย 2026-08-20") == (
+        "sick",
+        date(2026, 8, 20),
+        date(2026, 8, 20),
+        "",
+    )
 
 def test_parse_leave_rejects_reverse_dates():
     assert parse_leave_command("ขอลา ป่วย 2026-08-21 2026-08-20") is None
 
 
 def test_announcement_is_flex_card():
-    message = announcement_message("วันหยุดบริษัท", "บริษัทหยุดวันที่ 20 สิงหาคม")
+    message = announcement_message(
+        "วันหยุดบริษัท",
+        "บริษัทหยุดวันที่ 20 สิงหาคม",
+        datetime(2026, 8, 13, 3, 30, tzinfo=timezone.utc),
+    )
     assert message["type"] == "flex"
     assert message["contents"]["type"] == "bubble"
     assert message["contents"]["body"]["contents"][0]["text"] == "วันหยุดบริษัท"
+    assert message["contents"]["header"]["contents"][0]["contents"][1]["text"] == "13/08/2026 · 10:30 น."
+    assert message["contents"]["footer"]["contents"][0]["action"]["text"] == "ประกาศ"
