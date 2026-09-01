@@ -1,65 +1,65 @@
 # HR Chatbot via LINE Official Account
 
-MVP: พนักงานยืนยันตัวด้วย LINE Login, ใช้ LINE OA ถามนโยบาย/ดูวันลา และใช้ LIFF Mini App สำหรับขอลา ดูสิทธิ์ ประวัติ เอกสารแนบ และประกาศ. HR จัดการข้อมูลผ่าน Dashboard.
+MVP: employees verify identity using LINE Login, ask policy questions and check leave balances through the LINE OA, and use the LIFF Mini App to request leave, view benefits, history, attached documents, and announcements. HR manages data through the Dashboard.
 
-## เริ่มใช้งาน
+## Getting Started
 
-1. สร้างไฟล์ตั้งค่าและเปลี่ยนรหัสผ่านทุกค่า
+1. Create the configuration file and replace all default values
 
    ```bash
    cp .env.example .env
    ```
 
-2. รันระบบ
+2. Start the system
 
    ```bash
    docker compose up --build
    ```
 
-3. เปิด Dashboard ที่ `http://localhost:3000` และล็อกอินด้วย `HR_USERNAME` / `HR_PASSWORD`
+3. Open the Dashboard at `http://localhost:3000` and log in with `HR_USERNAME` / `HR_PASSWORD`
 
-ข้อมูลตัวอย่างมีพนักงาน `E001` พร้อมวันลาเริ่มต้น เมื่อเพิ่มพนักงานผ่าน Dashboard ระบบจะสร้างสิทธิ์วันลา พักร้อน 10 วัน, ลาป่วย 30 วัน และลากิจ 5 วันให้อัตโนมัติ
+A sample employee, `E001`, is included with initial leave balances. When a new employee is added through the Dashboard, the system automatically creates leave entitlements: 10 days of annual leave, 30 days of sick leave, and 5 days of personal leave.
 
-## ตั้งค่า LINE
+## LINE Setup
 
-สร้าง `LINE Login channel` และ `Messaging API channel` ภายใต้ Provider เดียวกัน แล้วตั้งค่าดังนี้
+Create a `LINE Login channel` and a `Messaging API channel` under the same Provider, then configure the following:
 
-- LINE Login callback URL: `https://<โดเมน-backend>/auth/line/callback`
-- Messaging API webhook URL: `https://<โดเมน-backend>/line/webhook`
-- ใส่ Channel ID/Secret/Access token ลง `.env`
-- ตั้ง `PUBLIC_BASE_URL` เป็น URL HTTPS ของ backend ที่ LINE เข้าถึงได้
-- สร้าง LIFF app ใน LINE Login channel, ตั้ง Endpoint URL เป็น `https://<โดเมน-frontend>/liff`, แล้วใส่ `NEXT_PUBLIC_LIFF_ID`
-- ตั้ง `PUBLIC_BACKEND_URL` เป็น URL HTTPS ของ backend ที่เบราว์เซอร์เข้าถึงได้ และ `LIFF_ORIGIN` เป็น URL frontend
-- ตั้ง `LIFF_SESSION_SECRET` เป็นค่าสุ่มยาว และอย่าใช้ค่า default
+- LINE Login callback URL: `https://<backend-domain>/auth/line/callback`
+- Messaging API webhook URL: `https://<backend-domain>/line/webhook`
+- Put the Channel ID, Secret, and Access token in `.env`
+- Set `PUBLIC_BASE_URL` to the HTTPS URL of the backend that LINE can access
+- Create a LIFF app in the LINE Login channel, set the Endpoint URL to `https://<frontend-domain>/liff`, and then set `NEXT_PUBLIC_LIFF_ID`
+- Set `PUBLIC_BACKEND_URL` to the HTTPS URL of the backend that the browser can access, and `LIFF_ORIGIN` to the frontend URL
+- Set `LIFF_SESSION_SECRET` to a long random value and do not use the default
 
-### เปิด LIFF จากแชท LINE
+### Open LIFF from the LINE chat
 
-สร้าง Rich Menu ใน LINE Official Account Manager แล้วเพิ่มปุ่ม **HR Self-service** แบบ `URI`:
+Create a Rich Menu in the LINE Official Account Manager and add a **HR Self-service** button of type `URI`:
 
 ```text
 https://liff.line.me/<LIFF_ID>
 ```
 
-เมื่อพนักงานกดปุ่ม ระบบจะเปิด LIFF ใน LINE และยืนยันตัวตนจากบัญชี LINE ที่ HR เชื่อมไว้. ภายใน LIFF พนักงานขอลา ดูวันลาคงเหลือ ประวัติการลา แนบเอกสาร และดูประกาศได้.
+When an employee taps the button, the system opens LIFF in LINE and verifies identity using the LINE account linked by HR. Within LIFF, employees can request leave, view remaining leave balances, leave history, attach documents, and view announcements.
 
-ใช้ URL นี้แทนการเปิด `https://<โดเมน-frontend>/liff` โดยตรง เพื่อให้ LIFF SDK รับ LINE ID token ได้ครบถ้วน.
+Use this URL instead of opening `https://<frontend-domain>/liff` directly so the LIFF SDK can receive a complete LINE ID token.
 
-จาก Dashboard กด **ออกลิงก์ LINE** ที่พนักงาน ส่งลิงก์นั้นให้เจ้าตัว และให้เปิดภายใน 30 นาที ลิงก์ใช้ได้ครั้งเดียว หลัง LINE Login สำเร็จ `LINE user ID` จะถูกผูกกับรหัสพนักงาน และ chatbot จะอนุญาตเฉพาะพนักงานที่ยัง Active
+From the Dashboard, click **Unlink LINE** for the employee, send the generated link to the employee, and ask them to open it within 30 minutes. The link is single-use. After successful LINE Login, the `LINE user ID` is bound to the employee code, and the chatbot only allows employees whose status is still `Active`.
 
-## คำสั่งในแชท
+## Chat Commands
 
 ```text
-เมนู
-วันลาคงเหลือ
-ประกาศ
-ขอลา พักร้อน 2026-08-20 2026-08-21 ธุระครอบครัว
+Menu
+Remaining leave
+Announcements
+Request leave: Annual Leave 2026-08-20 2026-08-21 Family matters
 ```
 
-คำถามนโยบายค้นจาก `faqs` ก่อน. ถ้าตั้ง `OPENAI_API_KEY` ระบบจะให้ LLM เรียบเรียงคำตอบจาก FAQ ที่พบเท่านั้น; ถ้าไม่ตั้ง key จะตอบข้อความ FAQ ตรง ๆ.
+Policy questions are searched in `faqs` first. If `OPENAI_API_KEY` is set, the system uses the LLM to summarize answers only from the matching FAQs; if the key is not set, it returns the FAQ text directly.
 
-LIFF ต้องใช้บัญชี LINE ที่เชื่อมกับพนักงานแล้ว. ถ้ายังไม่เชื่อม ระบบจะแจ้งให้ติดต่อ HR.
+LIFF must be used with a LINE account already linked to the employee. If it is not linked, the system will instruct the employee to contact HR.
 
-## ทดสอบ backend
+## Backend Testing
 
 ```bash
 cd backend
@@ -67,10 +67,10 @@ uv sync
 uv run pytest
 ```
 
-API สำหรับทดสอบและดู schema อยู่ที่ `http://localhost:8000/docs`
+The API documentation and schema can be viewed at `http://localhost:8000/docs`
 
-## ขอบเขต MVP
+## MVP Scope
 
-- Dashboard ใช้ HTTP Basic Auth และ backend ใช้ admin API key เหมาะกับต้นแบบภายในเท่านั้น ก่อน production ควรเปลี่ยนเป็น Company SSO
-- วันลานับเฉพาะจันทร์–ศุกร์ ยังไม่หักวันหยุดบริษัท
-- เอกสารแนบเก็บ local volume ของ backend: เหมาะกับ MVP; production ควรเปลี่ยนเป็น object storage และ URL ที่มีสิทธิ์เข้าถึง
+- The Dashboard uses HTTP Basic Auth, and the backend uses an admin API key. This is suitable only for internal prototypes; before production, it should be replaced with Company SSO.
+- Leave is counted only Monday to Friday; company holidays are not deducted yet.
+- Uploaded documents are stored in the backend's local volume; this is appropriate for the MVP, but production should switch to object storage with access-controlled URLs.
