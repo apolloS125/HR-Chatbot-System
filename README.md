@@ -30,6 +30,19 @@ MVP: พนักงานยืนยันตัวด้วย LINE Login, �
 - ตั้ง `PUBLIC_BASE_URL` เป็น URL HTTPS ของ backend ที่ LINE เข้าถึงได้
 - สร้าง LIFF app ใน LINE Login channel, ตั้ง Endpoint URL เป็น `https://<โดเมน-frontend>/liff`, แล้วใส่ `NEXT_PUBLIC_LIFF_ID`
 - ตั้ง `PUBLIC_BACKEND_URL` เป็น URL HTTPS ของ backend ที่เบราว์เซอร์เข้าถึงได้ และ `LIFF_ORIGIN` เป็น URL frontend
+- ตั้ง `LIFF_SESSION_SECRET` เป็นค่าสุ่มยาว และอย่าใช้ค่า default
+
+### เปิด LIFF จากแชท LINE
+
+สร้าง Rich Menu ใน LINE Official Account Manager แล้วเพิ่มปุ่ม **HR Self-service** แบบ `URI`:
+
+```text
+https://liff.line.me/<LIFF_ID>
+```
+
+เมื่อพนักงานกดปุ่ม ระบบจะเปิด LIFF ใน LINE และยืนยันตัวตนจากบัญชี LINE ที่ HR เชื่อมไว้. ภายใน LIFF พนักงานขอลา ดูวันลาคงเหลือ ประวัติการลา แนบเอกสาร และดูประกาศได้.
+
+ใช้ URL นี้แทนการเปิด `https://<โดเมน-frontend>/liff` โดยตรง เพื่อให้ LIFF SDK รับ LINE ID token ได้ครบถ้วน.
 
 จาก Dashboard กด **ออกลิงก์ LINE** ที่พนักงาน ส่งลิงก์นั้นให้เจ้าตัว และให้เปิดภายใน 30 นาที ลิงก์ใช้ได้ครั้งเดียว หลัง LINE Login สำเร็จ `LINE user ID` จะถูกผูกกับรหัสพนักงาน และ chatbot จะอนุญาตเฉพาะพนักงานที่ยัง Active
 
@@ -43,6 +56,8 @@ MVP: พนักงานยืนยันตัวด้วย LINE Login, �
 ```
 
 คำถามนโยบายค้นจาก `faqs` ก่อน. ถ้าตั้ง `OPENAI_API_KEY` ระบบจะให้ LLM เรียบเรียงคำตอบจาก FAQ ที่พบเท่านั้น; ถ้าไม่ตั้ง key จะตอบข้อความ FAQ ตรง ๆ.
+
+LIFF ต้องใช้บัญชี LINE ที่เชื่อมกับพนักงานแล้ว. ถ้ายังไม่เชื่อม ระบบจะแจ้งให้ติดต่อ HR.
 
 ## ทดสอบ backend
 
