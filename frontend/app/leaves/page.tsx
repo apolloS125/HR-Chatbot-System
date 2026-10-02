@@ -1,4 +1,5 @@
-import { decideLeave } from "../actions";
+import { retryLeaveNotification } from "../actions";
+import { LeaveDecisionForm } from "../../components/leave-decision";
 import { formatDate, get, leaveLabels, statusLabels, type Leave } from "../../lib/api";
 
 const statusClasses: Record<string, string> = {
@@ -38,13 +39,11 @@ export default async function LeavesPage() {
                   <td className="px-4 py-3.5 text-sm">{leaveLabels[leave.leave_type] ?? leave.leave_type}</td>
                   <td className="px-4 py-3.5 text-sm whitespace-nowrap">{formatDate(leave.start_date)} – {formatDate(leave.end_date)}</td>
                   <td className="px-4 py-3.5 text-sm whitespace-nowrap">{leave.days} วัน</td>
-                  <td className="max-w-[220px] px-4 py-3.5 text-sm text-[#5d6961]">{leave.reason}</td>
+                  <td className="max-w-[220px] px-4 py-3.5 text-sm text-[#5d6961]">{leave.reason}{leave.half_day && <small className="block">{leave.half_day === "morning" ? "ครึ่งวันเช้า" : "ครึ่งวันบ่าย"}</small>}{leave.attachment_id && <a className="block text-[#087747]" href={`/attachments/${leave.attachment_id}`}>เปิดเอกสารแนบ</a>}</td>
                   <td className="px-4 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClasses[leave.status] ?? "bg-gray-100 text-gray-600"}`}>{statusLabels[leave.status] ?? leave.status}</span></td>
                   <td className="px-4 py-3.5">
-                    {leave.status === "pending" ? <div className="flex gap-1.5">
-                      <form action={decideLeave}><input type="hidden" name="leave_id" value={leave.id}/><input type="hidden" name="decision" value="approved"/><button className="min-h-8 rounded-lg bg-[#087747] px-2.5 text-[11px] font-bold text-white transition hover:bg-[#06643b]">อนุมัติ</button></form>
-                      <form action={decideLeave}><input type="hidden" name="leave_id" value={leave.id}/><input type="hidden" name="decision" value="rejected"/><button className="min-h-8 rounded-lg bg-[#f8eded] px-2.5 text-[11px] font-bold text-[#a32727]">ปฏิเสธ</button></form>
-                    </div> : <span className="text-xs text-[#8a958e]">ดำเนินการแล้ว</span>}
+                    {leave.status === "pending" ? <LeaveDecisionForm id={leave.id} /> : <span className="text-xs text-[#8a958e]">ดำเนินการแล้ว</span>}
+                    {leave.notification_status === "failed" && <form action={retryLeaveNotification}><input type="hidden" name="id" value={leave.id} /><button className="mt-2 text-xs text-[#a32727]">แจ้งผลไม่สำเร็จ ส่งอีกครั้ง</button></form>}
                   </td>
                 </tr>
               ))}

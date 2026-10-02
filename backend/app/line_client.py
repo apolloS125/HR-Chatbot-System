@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -155,17 +154,19 @@ async def reply_line(reply_token: str, message: str | dict[str, object]) -> None
         )
         response.raise_for_status()
 
-async def multicast_line(user_ids: list[str], message: dict[str, object]) -> None:
+async def send_line(path: str, payload: dict, retry_key: str) -> None:
     if not LINE_CHANNEL_ACCESS_TOKEN:
         raise HTTPException(status_code=503, detail="LINE Messaging API is not configured")
     async with httpx.AsyncClient(timeout=15) as client:
-        for offset in range(0, len(user_ids), 500):
-            response = await client.post(
-                "https://api.line.me/v2/bot/message/multicast",
-                headers={
-                    "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
-                    "X-Line-Retry-Key": str(uuid.uuid4()),
-                },
-                json={"to": user_ids[offset:offset + 500], "messages": [message]},
-            )
-            response.raise_for_status()
+        response = await client.post(f"https://api.line.me/v2/bot/message/{path}", headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}", "X-Line-Retry-Key": retry_key}, json=payload)
+        if response.status_code == 409 and response.headers.get("x-line-accepted-request-id"):
+            return
+        response.raise_for_status()
+
+
+async def multicast_line(user_ids: list[str], message: dict, retry_key: str) -> None:
+    await send_line("multicast", {"to": user_ids, "messages": [message]}, retry_key)
+
+
+async def push_line(user_id: str, message: str, retry_key: str) -> None:
+    await send_line("push", {"to": user_id, "messages": [{"type": "text", "text": message[:5000]}]}, retry_key)

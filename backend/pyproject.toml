@@ -9,6 +9,7 @@ dependencies = [
   "python-multipart>=0.0.20,<1",
   "redis>=5.2,<7",
   "uvicorn[standard]>=0.35,<1",
+  "pypdf>=6.19.0",
 ]
 
 [dependency-groups]

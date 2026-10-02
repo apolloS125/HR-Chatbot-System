@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { createAnnouncement, type AnnouncementState } from "../app/actions";
 
 const initialState: AnnouncementState = { message: "", error: "" };
@@ -8,8 +8,14 @@ const field = "w-full min-w-0 rounded-lg border border-[#cad7ce] bg-white px-3 p
 
 export function AnnouncementForm() {
   const [state, action, pending] = useActionState(createAnnouncement, initialState);
+  const requestKey = useRef("");
+  useEffect(() => { if (state.message) requestKey.current = ""; }, [state.message]);
   return (
-    <form action={action} className="grid gap-3 p-5">
+    <form action={action} className="grid gap-3 p-5" onSubmit={(event) => {
+      if (!requestKey.current) requestKey.current = crypto.randomUUID();
+      (event.currentTarget.elements.namedItem("request_key") as HTMLInputElement).value = requestKey.current;
+    }}>
+      <input type="hidden" name="request_key" />
       <input className={field} name="title" placeholder="หัวข้อประกาศ" maxLength={120} required />
       <textarea className={`${field} resize-y leading-relaxed`} name="body" placeholder="รายละเอียดประกาศ" maxLength={1500} rows={6} required />
       <button className="min-h-10 rounded-lg bg-[#087747] px-3 font-bold text-white transition hover:bg-[#06643b] disabled:cursor-wait disabled:opacity-60" disabled={pending}>

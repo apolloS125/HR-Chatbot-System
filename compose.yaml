@@ -1,10 +1,11 @@
 services:
   mongodb:
     image: mongo:8
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     environment:
       MONGO_INITDB_DATABASE: hr_chatbot
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status() } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongodb:27017'}]}) }; quit(db.hello().isWritablePrimary ? 0 : 1)"]
       interval: 3s
       timeout: 3s
       retries: 15
@@ -33,7 +34,7 @@ services:
   backend:
     build: ./backend
     environment:
-      MONGODB_URL: mongodb://mongodb:27017
+      MONGODB_URL: mongodb://mongodb:27017/?replicaSet=rs0
       MONGODB_DATABASE: hr_chatbot
       REDIS_URL: redis://redis:6379/0
       WEAVIATE_URL: http://weaviate:8080
@@ -44,10 +45,13 @@ services:
       LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
       LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN:-}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me}
+      HR_USERNAME: ${HR_USERNAME:-hr}
+      HR_PASSWORD: ${HR_PASSWORD:-change-me}
       LIFF_SESSION_SECRET: ${LIFF_SESSION_SECRET:-change-me}
       LIFF_ORIGIN: ${LIFF_ORIGIN:-http://localhost:3000}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -61,7 +65,11 @@ services:
       - "8000:8000"
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_LIFF_ID: ${NEXT_PUBLIC_LIFF_ID:-}
+        NEXT_PUBLIC_BACKEND_URL: ${PUBLIC_BACKEND_URL:-http://localhost:8000}
     environment:
       BACKEND_URL: http://backend:8000
       ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me}

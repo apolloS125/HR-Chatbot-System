@@ -1,4 +1,5 @@
 import { AnnouncementForm } from "../../components/announcement-form";
+import { retryAnnouncement } from "../actions";
 import { formatDateTime, get, type Announcement } from "../../lib/api";
 
 export default async function AnnouncementsPage() {
@@ -35,6 +36,8 @@ export default async function AnnouncementsPage() {
                 </div>
                 <h3 className="mt-3 mb-1.5 text-base font-bold">{announcement.title}</h3>
                 <p className="m-0 whitespace-pre-wrap text-sm leading-relaxed text-[#58655d]">{announcement.body}</p>
+                <p className="mt-3 text-xs text-[#6d7a72]">ส่งแล้ว {announcement.sent_count ?? 0}/{announcement.recipient_count ?? 0} บัญชี · {({ sent: "ส่งครบแล้ว", no_recipients: "ไม่มีผู้รับ", pending: "รอส่ง", sending: "กำลังส่ง", failed: "ส่งไม่ครบ", expired: "หมดเวลาส่งซ้ำ กรุณาตรวจสอบใน LINE" } as Record<string, string>)[announcement.delivery_status] ?? "ประกาศเดิม"}</p>
+                {["failed", "pending", "sending"].includes(announcement.delivery_status) && <form action={retryAnnouncement}><input type="hidden" name="id" value={announcement.id} /><button className="mt-2 rounded-lg bg-[#087747] px-3 py-2 text-xs text-white">ส่งส่วนที่ยังไม่สำเร็จอีกครั้ง</button></form>}
               </article>
             ))}
             {!announcements.length && <p className="m-0 p-10 text-center text-sm text-[#6d7a72]">ยังไม่มีประกาศ</p>}

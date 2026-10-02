@@ -1,4 +1,6 @@
 @import "tailwindcss";
+
+.dashboard-shell:has(.liff-app) { display: block; }
 body:has(.liff-app) { background: #f4f7f5; }
 body:has(.liff-app) aside { display: none; }
 body:has(.liff-app) > div { display: block; }

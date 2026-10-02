@@ -1,5 +1,9 @@
+import { headers as requestHeaders } from "next/headers";
+
 const backend = process.env.BACKEND_URL ?? "http://localhost:8000";
-const headers = { "X-Admin-Key": process.env.ADMIN_API_KEY ?? "change-me" };
+export async function adminHeaders() {
+  return { Authorization: (await requestHeaders()).get("authorization") ?? "" };
+}
 
 export type Summary = {
   active_employees: number;
@@ -15,6 +19,9 @@ export type Employee = {
   role: string;
   active: boolean;
   line_linked: boolean;
+  balances: Record<string, number>;
+  entitlements: Record<string, number>;
+  balances_year: number;
 };
 
 export type Leave = {
@@ -24,7 +31,10 @@ export type Leave = {
   leave_type: string;
   start_date: string;
   end_date: string;
-  days: string;
+  days: number;
+  attachment_id?: string;
+  half_day?: string;
+  notification_status?: string;
   reason: string;
   status: string;
 };
@@ -34,12 +44,29 @@ export type Announcement = {
   title: string;
   body: string;
   published_at: string;
+  delivery_status: string;
+  recipient_count: number;
+  sent_count: number;
 };
 
-export async function get<T>(path: string): Promise<T> {
-  const response = await fetch(`${backend}${path}`, { headers, cache: "no-store" });
-  if (!response.ok) throw new Error(`โหลดข้อมูลไม่สำเร็จ: ${path}`);
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${backend}${path}`, {
+    ...init,
+    headers: { ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...await adminHeaders(), ...init?.headers },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const detail = Array.isArray(data.detail)
+      ? data.detail.map((item: { msg: string }) => item.msg).join("; ")
+      : data.detail;
+    throw new Error(detail ?? "ทำรายการไม่สำเร็จ");
+  }
   return response.json();
+}
+
+export function get<T>(path: string): Promise<T> {
+  return api<T>(path);
 }
 
 export function formatDate(value: string) {
@@ -64,4 +91,5 @@ export const statusLabels: Record<string, string> = {
   pending: "รออนุมัติ",
   approved: "อนุมัติแล้ว",
   rejected: "ปฏิเสธ",
+  cancelled: "ยกเลิกแล้ว",
 };

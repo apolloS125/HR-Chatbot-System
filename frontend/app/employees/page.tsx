@@ -1,9 +1,10 @@
-import { DeleteEmployeeButton, EmployeeForm } from "../../components/employee-controls";
+import { EditEmployeeForm, EmployeeStatusButton, EmployeeForm } from "../../components/employee-controls";
 import { InviteButton } from "../../components/invite-button";
 import { get, type Employee } from "../../lib/api";
 
 export default async function EmployeesPage() {
-  const employees = await get<Employee[]>("/api/admin/employees");
+  const [employees, actor] = await Promise.all([get<Employee[]>("/api/admin/employees"), get<{ id: string; role: string }>("/api/admin/session")]);
+  const canManageRoles = actor.role === "admin";
   return (
     <main className="mx-auto w-[calc(100%-3rem)] max-w-[1240px] py-10 max-md:w-[calc(100%-1.75rem)] max-md:py-7">
       <header className="mb-7 flex items-end justify-between gap-6 max-sm:block">
@@ -19,7 +20,7 @@ export default async function EmployeesPage() {
         <div className="flex min-h-[74px] items-center border-b border-[#eaf0eb] px-5 py-4">
           <div><h2 className="mb-1 text-base font-bold">เพิ่มพนักงาน</h2><p className="text-xs text-[#6d7a72]">สร้างบัญชีก่อนออกลิงก์ยืนยันตัวตน</p></div>
         </div>
-        <EmployeeForm />
+        <EmployeeForm canManageRoles={canManageRoles} />
       </section>
 
       <section className="grid grid-cols-3 gap-3.5 max-xl:grid-cols-2 max-sm:grid-cols-1">
@@ -34,14 +35,16 @@ export default async function EmployeesPage() {
             </div>
             <p className="my-4 [overflow-wrap:anywhere] text-sm text-[#6d7a72]">{employee.work_email}</p>
             <div className="mb-4">
+              {!employee.active && <span className="mr-2 text-xs text-red-700">ปิดใช้งาน</span>}
               {employee.line_linked
                 ? <span className="inline-flex rounded-full bg-[#e4f5eb] px-2.5 py-1 text-[11px] font-bold text-[#087747]">✓ เชื่อม LINE แล้ว</span>
                 : <span className="inline-flex rounded-full bg-[#edf1ee] px-2.5 py-1 text-[11px] font-bold text-[#6a716c]">ยังไม่เชื่อม LINE</span>}
             </div>
             <div className="mt-auto flex items-end justify-between gap-2.5 border-t border-[#edf1ee] pt-3.5">
-              {!employee.line_linked && <InviteButton employeeId={employee.id} />}
-              <DeleteEmployeeButton employeeId={employee.id} name={employee.name} />
+              {employee.active && !employee.line_linked && (canManageRoles || employee.role === "employee") && <InviteButton employeeId={employee.id} />}
+              {(canManageRoles || employee.role === "employee") && employee.id !== actor.id && <EmployeeStatusButton employeeId={employee.id} name={employee.name} active={employee.active} />}
             </div>
+            {(canManageRoles || employee.role === "employee") && <EditEmployeeForm employee={employee} canManageRoles={canManageRoles} />}
           </article>
         ))}
         {!employees.length && <div className="col-span-full rounded-2xl border border-[#e1e9e3] bg-white p-10 text-center text-sm text-[#6d7a72]">ยังไม่มีพนักงานในระบบ</div>}

@@ -1,23 +1,16 @@
 import secrets
-from datetime import date
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
-from fastapi.responses import Response
 
-from .core import LINE_LOGIN_CHANNEL_ID, PUBLIC_BASE_URL, db, issue_liff_token, read_liff_token, seaweed_delete, seaweed_read, seaweed_upload
-from .leaves import submit_leave
+from .core import LINE_LOGIN_CHANNEL_ID, db, document_view, file_response, issue_liff_token, read_liff_token, seaweed_delete, seaweed_upload
+from .leaves import cancel_leave, read_balances, submit_leave
 from .schemas import LiffLeaveCreate, LiffSessionCreate
 
 router = APIRouter(prefix="/api/liff")
 ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png"}
-
-
-def document_view(item):
-    return {"id": item["_id"], **{key: value for key, value in item.items() if key != "_id"}}
 
 
 async def current_employee(authorization: Annotated[str | None, Header()] = None, database=Depends(db)):
@@ -38,8 +31,9 @@ async def create_session(data: LiffSessionCreate, database=Depends(db)):
 
 
 @router.get("/balances")
-async def balances(employee=Depends(current_employee)):
-    return [{"leave_type": key, "remaining_days": value} for key, value in employee["balances"].items()]
+async def balances(employee=Depends(current_employee), database=Depends(db)):
+    values = await read_balances(database, employee["_id"])
+    return [{"leave_type": key, "remaining_days": value} for key, value in values.items()]
 
 
 @router.get("/leaves")
@@ -48,15 +42,18 @@ async def leaves(employee=Depends(current_employee), database=Depends(db)):
 
 
 @router.get("/announcements")
-async def announcements(database=Depends(db)):
+async def announcements(employee=Depends(current_employee), database=Depends(db)):
     return [document_view(item) async for item in database.announcements.find({}).sort("published_at", -1).limit(20)]
 
 
 @router.post("/attachments", status_code=201)
-async def upload_attachment(file: Annotated[UploadFile, File()], employee=Depends(current_employee), authorization: Annotated[str | None, Header()] = None, database=Depends(db)):
+async def upload_attachment(file: Annotated[UploadFile, File()], employee=Depends(current_employee), database=Depends(db)):
     if file.content_type not in ALLOWED_TYPES: raise HTTPException(status_code=415, detail="รองรับเฉพาะ PDF, JPG และ PNG")
     content = await file.read(10 * 1024 * 1024 + 1)
     if len(content) > 10 * 1024 * 1024: raise HTTPException(status_code=413, detail="ไฟล์ต้องไม่เกิน 10 MB")
+    signatures = {"application/pdf": content.startswith(b"%PDF-"), "image/jpeg": content.startswith(b"\xff\xd8\xff"), "image/png": content.startswith(b"\x89PNG\r\n\x1a\n")}
+    if not signatures[file.content_type]:
+        raise HTTPException(status_code=415, detail="เนื้อหาไฟล์ไม่ตรงกับประเภท PDF/JPG/PNG")
     filename = Path(file.filename or "file").name
     fid = await seaweed_upload(filename, content, file.content_type)
     file_id = f"F-{secrets.token_hex(8)}"
@@ -66,21 +63,21 @@ async def upload_attachment(file: Annotated[UploadFile, File()], employee=Depend
         try: await seaweed_delete(fid)
         except httpx.HTTPError: pass
         raise
-    token = authorization.removeprefix("Bearer ") if authorization else ""
-    return {"url": f"{PUBLIC_BASE_URL}/api/liff/attachments/{file_id}?token={token}", "name": filename}
+    return {"id": file_id, "name": filename}
 
 
 @router.get("/attachments/{file_id}")
-async def attachment(file_id: str, token: str, database=Depends(db)):
-    user_id = read_liff_token(token)
-    employee = await database.employees.find_one({"line_user_id": user_id, "active": True}) if user_id else None
-    file = await database.files.find_one({"_id": file_id, "employee_code": employee["_id"]}) if employee else None
-    if not file: raise HTTPException(status_code=404, detail="ไม่พบเอกสาร")
-    return Response(await seaweed_read(file["fid"]), media_type=file["content_type"], headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file['name'])}"})
+async def attachment(file_id: str, employee=Depends(current_employee), database=Depends(db)):
+    return await file_response(database, file_id, employee["_id"])
 
 
 @router.post("/leaves", status_code=201)
 async def create_leave(data: LiffLeaveCreate, employee=Depends(current_employee), database=Depends(db)):
-    try: request_id, days = await submit_leave(database, employee["_id"], data.leave_type, date.fromisoformat(data.start_date), date.fromisoformat(data.end_date), data.reason, attachment_url=data.attachment_url)
+    try: request_id, days = await submit_leave(database, employee["_id"], data.leave_type, data.start_date, data.end_date, data.reason, source_event_id=f"liff:{employee['_id']}:{data.request_key}", attachment_id=data.attachment_id, half_day=data.half_day)
     except ValueError: raise HTTPException(status_code=422, detail="รูปแบบวันที่ไม่ถูกต้อง")
     return {"id": request_id, "days": days, "status": "pending"}
+
+
+@router.post("/leaves/{leave_id}/cancel")
+async def cancel(leave_id: str, employee=Depends(current_employee), database=Depends(db)):
+    return await cancel_leave(database, leave_id, employee["_id"])

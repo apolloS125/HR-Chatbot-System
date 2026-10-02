@@ -8,10 +8,14 @@ const items = [
   { href: "/employees", icon: "♙", label: "พนักงาน" },
   { href: "/leaves", icon: "✓", label: "คำขอลา" },
   { href: "/announcements", icon: "◫", label: "ประกาศ" },
+  { href: "/knowledge", icon: "?", label: "FAQ และเอกสาร" },
+  { href: "/holidays", icon: "▦", label: "วันหยุดบริษัท" },
+  { href: "/audit", icon: "≡", label: "ประวัติการจัดการ" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  if (pathname === "/liff" || pathname.startsWith("/liff/")) return null;
   return (
     <aside className="sticky top-0 z-50 flex bg-[#123c2a] px-4 py-2.5 text-[#d9e8df] shadow-lg md:h-dvh md:flex-col md:px-[18px] md:py-6 md:shadow-none">
       <div className="flex items-center gap-3 pr-4 md:px-2 md:pb-7 md:pr-2">
