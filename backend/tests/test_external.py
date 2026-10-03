@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -26,16 +27,58 @@ def test_llm_reads_response_message_content_and_masks_identifiers(monkeypatch):
         assert str(request.url) == "https://ai.psu.blue/v1/chat/completions"
         assert body["model"] == "openai/gpt-6-luna"
         assert body["stream"] is False
+        assert body["max_completion_tokens"] == 800
         assert "employee@example.com" not in body["messages"][1]["content"]
-        return httpx.Response(200, json={"choices": [{"message": {"content": "คำตอบจากนโยบาย [1]"}}]})
-    mock_http(monkeypatch, handler)
-    assert asyncio.run(knowledge._llm("employee@example.com ถามวันลา", "[1] วันลา 10 วัน")) == "คำตอบจากนโยบาย [1]"
+        return httpx.Response(200, json={"id": "test", "object": "chat.completion", "created": 0, "model": "openai/gpt-6-luna", "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "คำตอบจากนโยบาย [1]"}}]})
+    async def call():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await knowledge._llm("employee@example.com ถามวันลา", "[1] วันลา 10 วัน", client)
+    assert asyncio.run(call()) == "คำตอบจากนโยบาย [1]"
 
 
 def test_llm_outage_falls_back_to_source_text(monkeypatch):
     monkeypatch.setattr(knowledge, "OPENAI_API_KEY", "test-key")
-    mock_http(monkeypatch, lambda _: httpx.Response(503))
-    assert asyncio.run(knowledge._llm("วันลา", "วันลา 10 วัน")) == "วันลา 10 วัน"
+    async def call():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(503))) as client:
+            return await knowledge._llm("วันลา", "วันลา 10 วัน", client)
+    assert asyncio.run(call()) == "วันลา 10 วัน"
+
+
+def test_policy_retrieval_excludes_archived_and_cites_three_sources(monkeypatch):
+    policies = [
+        {"_id": "archived", "question": "old", "answer": "old", "source": "old.pdf", "active": False},
+        *({"_id": str(i), "question": f"q{i}", "answer": f"a{i}", "source": f"p{i}.pdf", "active": True} for i in range(1, 5)),
+    ]
+    class Faqs:
+        def find(self, query):
+            assert query == {"active": True}
+            async def results():
+                for item in policies:
+                    if item["active"]:
+                        yield item
+            return results()
+    async def search(*_): return ["archived", "1", "2", "3", "4"]
+    async def answer(_, context):
+        assert context == "[1] a1\n\n[2] a2\n\n[3] a3"
+        return "สรุป [1] [2] [3]"
+    monkeypatch.setattr(knowledge, "search_policy", search)
+    monkeypatch.setattr(knowledge, "_llm", answer)
+    result = asyncio.run(knowledge.answer_policy(SimpleNamespace(faqs=Faqs()), "unknown"))
+    assert result == "สรุป [1] [2] [3]\n\nแหล่งข้อมูล:\n[1] p1.pdf\n[2] p2.pdf\n[3] p3.pdf"
+
+
+def test_policy_without_evidence_does_not_call_llm(monkeypatch):
+    class Faqs:
+        def find(self, query):
+            async def results():
+                if False:
+                    yield query
+            return results()
+    async def search(*_): return []
+    async def fail(*_): raise AssertionError("LLM must not be called")
+    monkeypatch.setattr(knowledge, "search_policy", search)
+    monkeypatch.setattr(knowledge, "_llm", fail)
+    assert asyncio.run(knowledge.answer_policy(SimpleNamespace(faqs=Faqs()), "unknown")) is None
 
 
 @pytest.mark.parametrize("choice,confidence,expected", [("balance", 0.95, "balance"), ("balance", 0.2, None), ("approve", 1, None), ("balance", 2, None)])

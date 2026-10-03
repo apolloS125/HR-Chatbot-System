@@ -10,6 +10,9 @@ dependencies = [
   "redis>=5.2,<7",
   "uvicorn[standard]>=0.35,<1",
   "pypdf>=6.19.0",
+  "langchain-core>=1,<2",
+  "langchain-openai>=1,<2",
+  "langchain-text-splitters>=1,<2",
 ]
 
 [dependency-groups]
