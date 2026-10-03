@@ -50,7 +50,9 @@ services:
       LIFF_SESSION_SECRET: ${LIFF_SESSION_SECRET:-change-me}
       LIFF_ORIGIN: ${LIFF_ORIGIN:-http://localhost:3000}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://ai.psu.blue/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-openai/gpt-6-luna}
+      OPENAI_EMBEDDING_API_KEY: ${OPENAI_EMBEDDING_API_KEY:-}
       TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
     depends_on:
       mongodb:

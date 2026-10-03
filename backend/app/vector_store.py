@@ -9,7 +9,7 @@ import httpx
 from .privacy import mask_text
 
 VECTOR_SIZE = 128
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_EMBEDDING_API_KEY", "")
 POLICY_CLASS = "HrPolicySemantic" if OPENAI_API_KEY else "HrPolicy"
 
 

@@ -19,11 +19,15 @@ def mock_http(monkeypatch, handler):
 
 def test_llm_reads_response_message_content_and_masks_identifiers(monkeypatch):
     monkeypatch.setattr(knowledge, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(knowledge, "OPENAI_BASE_URL", "https://ai.psu.blue/v1")
+    monkeypatch.setattr(knowledge, "OPENAI_MODEL", "openai/gpt-6-luna")
     def handler(request):
         body = json.loads(request.content)
-        assert "employee@example.com" not in body["input"]
-        assert body["store"] is False
-        return httpx.Response(200, json={"output": [{"type": "message", "content": [{"type": "output_text", "text": "คำตอบจากนโยบาย [1]"}]}]})
+        assert str(request.url) == "https://ai.psu.blue/v1/chat/completions"
+        assert body["model"] == "openai/gpt-6-luna"
+        assert body["stream"] is False
+        assert "employee@example.com" not in body["messages"][1]["content"]
+        return httpx.Response(200, json={"choices": [{"message": {"content": "คำตอบจากนโยบาย [1]"}}]})
     mock_http(monkeypatch, handler)
     assert asyncio.run(knowledge._llm("employee@example.com ถามวันลา", "[1] วันลา 10 วัน")) == "คำตอบจากนโยบาย [1]"
 

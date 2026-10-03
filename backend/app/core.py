@@ -31,7 +31,8 @@ HR_USERNAME = os.getenv("HR_USERNAME", "hr")
 HR_PASSWORD = os.getenv("HR_PASSWORD", "change-me")
 LIFF_SESSION_SECRET = os.getenv("LIFF_SESSION_SECRET", ADMIN_API_KEY)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://ai.psu.blue/v1").rstrip("/")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "openai/gpt-6-luna")
 
 
 @asynccontextmanager
