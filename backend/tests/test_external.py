@@ -29,11 +29,12 @@ def test_llm_reads_response_message_content_and_masks_identifiers(monkeypatch):
         assert body["stream"] is False
         assert body["max_completion_tokens"] == 800
         assert "employee@example.com" not in body["messages"][1]["content"]
-        return httpx.Response(200, json={"id": "test", "object": "chat.completion", "created": 0, "model": "openai/gpt-6-luna", "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "คำตอบจากนโยบาย [1]"}}]})
+        assert "ห้ามแสดงหมายเลขอ้างอิง" in body["messages"][0]["content"]
+        return httpx.Response(200, json={"id": "test", "object": "chat.completion", "created": 0, "model": "openai/gpt-6-luna", "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "คำตอบจากนโยบาย"}}]})
     async def call():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             return await knowledge._llm("employee@example.com ถามวันลา", "[1] วันลา 10 วัน", client)
-    assert asyncio.run(call()) == "คำตอบจากนโยบาย [1]"
+    assert asyncio.run(call()) == "คำตอบจากนโยบาย"
 
 
 def test_llm_outage_falls_back_to_source_text(monkeypatch):
@@ -60,11 +61,12 @@ def test_policy_retrieval_excludes_archived_and_cites_three_sources(monkeypatch)
     async def search(*_): return ["archived", "1", "2", "3", "4"]
     async def answer(_, context):
         assert context == "[1] a1\n\n[2] a2\n\n[3] a3"
-        return "สรุป [1] [2] [3]"
+        return "สรุปนโยบาย"
     monkeypatch.setattr(knowledge, "search_policy", search)
     monkeypatch.setattr(knowledge, "_llm", answer)
     result = asyncio.run(knowledge.answer_policy(SimpleNamespace(faqs=Faqs()), "unknown"))
-    assert result == "สรุป [1] [2] [3]\n\nแหล่งข้อมูล:\n[1] p1.pdf\n[2] p2.pdf\n[3] p3.pdf"
+    assert result == "สรุปนโยบาย\n\nหัวข้ออ้างอิง:\np1.pdf\np2.pdf\np3.pdf"
+    assert "[1]" not in result
 
 
 def test_policy_without_evidence_does_not_call_llm(monkeypatch):
