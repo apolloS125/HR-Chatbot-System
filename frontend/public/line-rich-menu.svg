@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2500" height="1686" viewBox="0 0 2500 1686">
+  <defs>
+    <linearGradient id="hr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#145C40"/>
+      <stop offset="1" stop-color="#087747"/>
+    </linearGradient>
+    <linearGradient id="ai" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#143C59"/>
+      <stop offset="1" stop-color="#1D6580"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="2500" height="1686" fill="#EAF1EC"/>
+
+  <rect x="48" y="48" width="1202" height="747" rx="48" fill="url(#hr)"/>
+  <circle cx="1100" cy="183" r="112" fill="#FFFFFF" fill-opacity=".08"/>
+  <circle cx="1100" cy="183" r="71" fill="none" stroke="#D7F2E2" stroke-width="10"/>
+  <path d="M1070 183h60M1100 153v60M1078 212l44-58" fill="none" stroke="#D7F2E2" stroke-width="9" stroke-linecap="round"/>
+  <text x="120" y="160" fill="#BCE6CF" font-family="Sarabun, sans-serif" font-size="48" font-weight="700" letter-spacing="7">HR SELF SERVICE</text>
+  <text x="120" y="340" fill="#FFFFFF" font-family="Sarabun, sans-serif" font-size="100" font-weight="700">จัดการงาน HR</text>
+  <text x="120" y="430" fill="#E2F3E8" font-family="Sarabun, sans-serif" font-size="48">วันลา  ·  ประกาศ  ·  เอกสารของคุณ</text>
+  <rect x="120" y="535" width="410" height="125" rx="62" fill="#FFFFFF"/>
+  <text x="325" y="616" fill="#075B3A" font-family="Sarabun, sans-serif" font-size="48" font-weight="700" text-anchor="middle">เปิดระบบ HR  →</text>
+
+  <rect x="1250" y="48" width="1202" height="747" rx="48" fill="url(#ai)"/>
+  <circle cx="2300" cy="183" r="112" fill="#FFFFFF" fill-opacity=".08"/>
+  <path d="M2250 178c0-30 24-54 54-54h18c30 0 54 24 54 54v13c0 30-24 54-54 54h-19l-42 27v-48c-7-9-11-20-11-33v-13Z" fill="none" stroke="#DCEFFA" stroke-width="10" stroke-linejoin="round"/>
+  <text x="1320" y="160" fill="#C5E5F0" font-family="Sarabun, sans-serif" font-size="48" font-weight="700" letter-spacing="7">CYBER CARE AI</text>
+  <text x="1320" y="340" fill="#FFFFFF" font-family="Sarabun, sans-serif" font-size="100" font-weight="700">ถาม AI</text>
+  <text x="1320" y="430" fill="#E4F1F5" font-family="Sarabun, sans-serif" font-size="48">ปรึกษาเรื่องความปลอดภัยไซเบอร์</text>
+  <rect x="1320" y="535" width="410" height="125" rx="62" fill="#FFFFFF"/>
+  <text x="1525" y="616" fill="#174A62" font-family="Sarabun, sans-serif" font-size="48" font-weight="700" text-anchor="middle">พิมพ์คำถาม  →</text>
+
+  <g fill="#FFFFFF" stroke="#D5E2D9" stroke-width="3">
+    <rect x="48" y="843" width="786" height="795" rx="44"/>
+    <rect x="857" y="843" width="786" height="795" rx="44"/>
+    <rect x="1666" y="843" width="786" height="795" rx="44"/>
+  </g>
+
+  <g fill="#E5F4EB">
+    <circle cx="441" cy="1085" r="113"/>
+    <circle cx="1250" cy="1085" r="113"/>
+    <circle cx="2059" cy="1085" r="113"/>
+  </g>
+  <g fill="none" stroke="#087747" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M398 1037h86v91h-86zM414 1063h54M414 1084h54M414 1105h35"/>
+    <path d="M1206 1065h88M1206 1090h88M1206 1115h64M1195 1038h110v94h-110z"/>
+    <path d="M2020 1053a47 47 0 1 1-12 61M2020 1053v35h-35M2098 1118v-35h35"/>
+  </g>
+  <text x="441" y="1335" fill="#163A29" font-family="Sarabun, sans-serif" font-size="52" font-weight="700" text-anchor="middle">เล่าเหตุการณ์</text>
+  <text x="441" y="1405" fill="#718177" font-family="Sarabun, sans-serif" font-size="34" text-anchor="middle">พิมพ์รายละเอียดให้ AI ช่วยดู</text>
+  <text x="1250" y="1335" fill="#163A29" font-family="Sarabun, sans-serif" font-size="52" font-weight="700" text-anchor="middle">ตัวอย่างคำถาม</text>
+  <text x="1250" y="1405" fill="#718177" font-family="Sarabun, sans-serif" font-size="34" text-anchor="middle">ดูหัวข้อที่ถามได้</text>
+  <text x="2059" y="1335" fill="#163A29" font-family="Sarabun, sans-serif" font-size="52" font-weight="700" text-anchor="middle">เริ่มแชตใหม่</text>
+  <text x="2059" y="1405" fill="#718177" font-family="Sarabun, sans-serif" font-size="34" text-anchor="middle">ล้างหัวข้อเดิม</text>
+</svg>

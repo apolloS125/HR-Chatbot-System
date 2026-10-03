@@ -12,7 +12,7 @@ import pytest
 from fastapi import HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from app import admin, core
+from app import admin, auth, core
 from app.admin import create_announcement, decide_leave, delete_employee, deliver_announcement
 from app.chatbot import handle_message
 from app.core import db, hash_password, issue_liff_token
@@ -108,14 +108,25 @@ def test_failure_after_balance_debit_rolls_back_everything(mongo):
     mongo(scenario)
 
 
-def test_soft_delete_keeps_leave_and_file_history(mongo):
+def test_delete_employee_removes_data_and_allows_reuse(mongo, monkeypatch):
+    monkeypatch.setattr(admin, "seaweed_delete", AsyncMock())
     async def scenario(database):
+        await database.employees.create_index("work_email", unique=True)
         key, _ = await submit_leave(database, "E001", "vacation", monday(), monday(), "พักผ่อน")
         await database.files.insert_one({"_id": "F-1", "employee_code": "E001", "fid": "fake"})
+        await database.line_oauth_sessions.insert_one({"_id": "S-1", "employee_code": "E001"})
+        await database.announcements.insert_one({"_id": "AN-1", "deliveries": [{"to": ["U123", "UOTHER"]}]})
+        await database.audit_logs.insert_many([{"actor": "E001", "action": "old", "subject": "other"}, {"actor": "HR001", "action": "old", "subject": "E001"}])
         await delete_employee("E001", database, SimpleNamespace(delete=AsyncMock()), ACTOR)
-        assert (await database.employees.find_one({"_id": "E001"}))["active"] is False
-        assert await database.leave_requests.find_one({"_id": key})
-        assert await database.files.find_one({"_id": "F-1"})
+        assert await database.employees.find_one({"_id": "E001"}) is None
+        assert await database.leave_requests.find_one({"_id": key}) is None
+        assert await database.files.find_one({"_id": "F-1"}) is None
+        assert await database.line_oauth_sessions.find_one({"_id": "S-1"}) is None
+        announcement = await database.announcements.find_one({"_id": "AN-1"})
+        assert announcement["deliveries"][0]["to"] == ["UOTHER"]
+        assert await database.audit_logs.count_documents({"$or": [{"actor": "E001"}, {"subject": "E001"}]}) == 1
+        admin.seaweed_delete.assert_awaited_once_with("fake")
+        await database.employees.insert_one({"_id": "E001", "name": "Employee again", "work_email": "e001@example.com"})
     mongo(scenario)
 
 
@@ -168,6 +179,36 @@ def test_personal_hr_credentials_and_role_enforcement(mongo):
             body = {"employee_code": "E001", "name": "Employee", "work_email": "e001@example.com", "role": "admin", "vacation": 10, "sick": 30, "personal": 5}
             assert (await client.patch("/api/admin/employees/E001", json=body, headers=basic("HR001"))).status_code == 403
             assert (await client.get("/api/admin/audit", headers=basic("HR001"))).status_code == 403
+    mongo(scenario)
+
+
+def test_line_link_preview_does_not_consume_code(mongo, monkeypatch):
+    monkeypatch.setattr(auth, "LINE_LOGIN_CHANNEL_ID", "test-channel")
+    monkeypatch.setattr(auth, "LINE_LOGIN_CHANNEL_SECRET", "test-secret")
+    monkeypatch.setattr(auth, "PUBLIC_BASE_URL", "https://example.test")
+
+    async def scenario(database):
+        code = secrets.token_urlsafe(18)
+        await database.employees.update_one(
+            {"_id": "E001"},
+            {"$set": {
+                "link_code_hash": core.sha256(code),
+                "link_code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+            }},
+        )
+        page = await auth.line_login_prompt("E001", code, database)
+        assert "เชื่อมบัญชี LINE" in page.body.decode()
+        link_filter = {"_id": "E001", "link_code_hash": core.sha256(code)}
+        assert await database.employees.find_one(link_filter)
+
+        redirect = await auth.line_login_start("E001", code, database)
+        assert redirect.status_code == 303
+        assert redirect.headers["location"].startswith("https://access.line.me/")
+        assert await database.employees.find_one(link_filter) is None
+
+        with pytest.raises(HTTPException) as error:
+            await auth.line_login_start("E001", code, database)
+        assert error.value.status_code == 400
     mongo(scenario)
 
 

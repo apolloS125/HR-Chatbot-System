@@ -9,7 +9,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from .core import HR_USERNAME, PUBLIC_BASE_URL, audit, cache, db, document_view, file_response, hash_password, require_admin, sha256, transaction
+from .core import (
+    HR_USERNAME,
+    PUBLIC_BASE_URL,
+    audit,
+    cache,
+    db,
+    document_view,
+    file_response,
+    hash_password,
+    require_admin,
+    seaweed_delete,
+    sha256,
+    transaction,
+)
 from .leaves import DEFAULT_ENTITLEMENTS, current_balances
 from .line_client import announcement_message, multicast_line, push_line
 from .schemas import ActiveUpdate, AnnouncementCreate, EmployeeCreate, EmployeeUpdate, HolidayCreate, LeaveDecision
@@ -115,8 +128,47 @@ async def set_employee_active(employee_id: str, data: ActiveUpdate, database=Dep
 
 @router.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: str, database=Depends(db), redis=Depends(cache), actor=Depends(require_admin)):
-    # Keep the old endpoint compatible while preserving employee history and files.
-    return await set_employee_active(employee_id, ActiveUpdate(active=False), database, redis, actor)
+    employee = await database.employees.find_one({"_id": employee_id})
+    if not employee:
+        raise HTTPException(status_code=404, detail="employee not found")
+    check_employee_permission(actor, employee)
+    if employee_id == actor["id"]:
+        raise HTTPException(status_code=409, detail="ไม่สามารถลบบัญชีตนเอง")
+
+    files = [item async for item in database.files.find({"employee_code": employee_id}, {"fid": 1})]
+    try:
+        for item in files:
+            if item.get("fid"):
+                await seaweed_delete(item["fid"])
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=503, detail="ลบเอกสารจากระบบจัดเก็บไม่สำเร็จ กรุณาลองใหม่") from error
+
+    async def remove(session):
+        current = await database.employees.find_one({"_id": employee_id}, session=session)
+        if not current:
+            raise HTTPException(status_code=404, detail="employee not found")
+        check_employee_permission(actor, current)
+        if employee_id == actor["id"]:
+            raise HTTPException(status_code=409, detail="ไม่สามารถลบบัญชีตนเอง")
+        await database.leave_requests.delete_many({"employee_code": employee_id}, session=session)
+        await database.files.delete_many({"employee_code": employee_id}, session=session)
+        await database.line_oauth_sessions.delete_many({"employee_code": employee_id}, session=session)
+        if current.get("line_user_id"):
+            await database.announcements.update_many(
+                {"deliveries.to": current["line_user_id"]},
+                {"$pull": {"deliveries.$[].to": current["line_user_id"]}},
+                session=session,
+            )
+        await database.audit_logs.delete_many(
+            {"$or": [{"subject": employee_id}, {"actor": employee_id}]},
+            session=session,
+        )
+        await database.employees.delete_one({"_id": employee_id}, session=session)
+        await audit(database, actor, "employee.delete", employee_id, session)
+
+    await transaction(database, remove)
+    await redis.delete("summary")
+    return {"ok": True}
 
 
 @router.get("/attachments/{file_id}")

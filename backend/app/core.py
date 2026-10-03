@@ -23,6 +23,7 @@ WEAVIATE_URL = os.getenv("WEAVIATE_URL", "http://localhost:8080")
 SEAWEED_MASTER_URL = os.getenv("SEAWEED_MASTER_URL", "http://localhost:9333")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
 LINE_LOGIN_CHANNEL_ID = os.getenv("LINE_LOGIN_CHANNEL_ID", "")
+LIFF_CHANNEL_ID = os.getenv("LIFF_CHANNEL_ID") or LINE_LOGIN_CHANNEL_ID
 LINE_LOGIN_CHANNEL_SECRET = os.getenv("LINE_LOGIN_CHANNEL_SECRET", "")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
@@ -188,9 +189,16 @@ async def seaweed_read(fid: str) -> bytes:
 
 
 async def seaweed_delete(fid: str) -> None:
-    volume_url = await seaweed_location(fid)
+    try:
+        volume_url = await seaweed_location(fid)
+    except httpx.HTTPStatusError as error:
+        if error.response.status_code == 404:
+            return
+        raise
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.delete(f"http://{volume_url}/{fid}")
+        if response.status_code == 404:
+            return
         response.raise_for_status()
 
 

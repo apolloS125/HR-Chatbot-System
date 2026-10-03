@@ -5,64 +5,124 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 
-from .core import LINE_LOGIN_CHANNEL_ID, db, document_view, file_response, issue_liff_token, read_liff_token, seaweed_delete, seaweed_upload
+from .core import (
+    LIFF_CHANNEL_ID,
+    db,
+    document_view,
+    file_response,
+    issue_liff_token,
+    read_liff_token,
+    seaweed_delete,
+    seaweed_upload,
+)
 from .leaves import cancel_leave, read_balances, submit_leave
 from .schemas import LiffLeaveCreate, LiffSessionCreate
 
 router = APIRouter(prefix="/api/liff")
 ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png"}
+MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
 
 
-async def current_employee(authorization: Annotated[str | None, Header()] = None, database=Depends(db)):
-    user_id = read_liff_token(authorization.removeprefix("Bearer ") if authorization else "")
-    employee = await database.employees.find_one({"line_user_id": user_id, "active": True}) if user_id else None
-    if not employee: raise HTTPException(status_code=401, detail="LIFF session is invalid or expired")
+async def current_employee(
+    authorization: Annotated[str | None, Header()] = None,
+    database=Depends(db),
+):
+    token = authorization.removeprefix("Bearer ") if authorization else ""
+    user_id = read_liff_token(token)
+    employee = (
+        await database.employees.find_one({"line_user_id": user_id, "active": True})
+        if user_id
+        else None
+    )
+    if not employee:
+        raise HTTPException(status_code=401, detail="LIFF session is invalid or expired")
     return employee
 
 
 @router.post("/session")
 async def create_session(data: LiffSessionCreate, database=Depends(db)):
-    if not LINE_LOGIN_CHANNEL_ID: raise HTTPException(status_code=503, detail="LINE Login is not configured")
-    async with httpx.AsyncClient(timeout=10) as client: response = await client.post("https://api.line.me/oauth2/v2.1/verify", data={"id_token": data.id_token, "client_id": LINE_LOGIN_CHANNEL_ID})
+    if not LIFF_CHANNEL_ID:
+        raise HTTPException(status_code=503, detail="LIFF is not configured")
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.post(
+            "https://api.line.me/oauth2/v2.1/verify",
+            data={"id_token": data.id_token, "client_id": LIFF_CHANNEL_ID},
+        )
+
     user_id = response.json().get("sub") if response.is_success else None
-    employee = await database.employees.find_one({"line_user_id": user_id, "active": True}) if user_id else None
-    if not employee: raise HTTPException(status_code=403, detail="ยังไม่ได้ยืนยันตัวพนักงาน กรุณาติดต่อ HR")
+    employee = (
+        await database.employees.find_one({"line_user_id": user_id, "active": True})
+        if user_id
+        else None
+    )
+    if not employee:
+        raise HTTPException(status_code=403, detail="ยังไม่ได้ยืนยันตัวพนักงาน กรุณาติดต่อ HR")
     return {"token": issue_liff_token(user_id), "name": employee["name"]}
 
 
 @router.get("/balances")
 async def balances(employee=Depends(current_employee), database=Depends(db)):
     values = await read_balances(database, employee["_id"])
-    return [{"leave_type": key, "remaining_days": value} for key, value in values.items()]
+    return [
+        {"leave_type": leave_type, "remaining_days": remaining_days}
+        for leave_type, remaining_days in values.items()
+    ]
 
 
 @router.get("/leaves")
 async def leaves(employee=Depends(current_employee), database=Depends(db)):
-    return [document_view(item) async for item in database.leave_requests.find({"employee_code": employee["_id"]}).sort("created_at", -1)]
+    query = database.leave_requests.find({"employee_code": employee["_id"]})
+    return [document_view(item) async for item in query.sort("created_at", -1)]
 
 
 @router.get("/announcements")
 async def announcements(employee=Depends(current_employee), database=Depends(db)):
-    return [document_view(item) async for item in database.announcements.find({}).sort("published_at", -1).limit(20)]
+    query = database.announcements.find({}).sort("published_at", -1).limit(20)
+    return [document_view(item) async for item in query]
 
 
 @router.post("/attachments", status_code=201)
-async def upload_attachment(file: Annotated[UploadFile, File()], employee=Depends(current_employee), database=Depends(db)):
-    if file.content_type not in ALLOWED_TYPES: raise HTTPException(status_code=415, detail="รองรับเฉพาะ PDF, JPG และ PNG")
-    content = await file.read(10 * 1024 * 1024 + 1)
-    if len(content) > 10 * 1024 * 1024: raise HTTPException(status_code=413, detail="ไฟล์ต้องไม่เกิน 10 MB")
-    signatures = {"application/pdf": content.startswith(b"%PDF-"), "image/jpeg": content.startswith(b"\xff\xd8\xff"), "image/png": content.startswith(b"\x89PNG\r\n\x1a\n")}
+async def upload_attachment(
+    file: Annotated[UploadFile, File()],
+    employee=Depends(current_employee),
+    database=Depends(db),
+):
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=415, detail="รองรับเฉพาะ PDF, JPG และ PNG")
+
+    content = await file.read(MAX_ATTACHMENT_SIZE + 1)
+    if len(content) > MAX_ATTACHMENT_SIZE:
+        raise HTTPException(status_code=413, detail="ไฟล์ต้องไม่เกิน 10 MB")
+
+    signatures = {
+        "application/pdf": content.startswith(b"%PDF-"),
+        "image/jpeg": content.startswith(b"\xff\xd8\xff"),
+        "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
+    }
     if not signatures[file.content_type]:
         raise HTTPException(status_code=415, detail="เนื้อหาไฟล์ไม่ตรงกับประเภท PDF/JPG/PNG")
+
     filename = Path(file.filename or "file").name
     fid = await seaweed_upload(filename, content, file.content_type)
     file_id = f"F-{secrets.token_hex(8)}"
     try:
-        await database.files.insert_one({"_id": file_id, "employee_code": employee["_id"], "fid": fid, "name": filename, "content_type": file.content_type})
+        await database.files.insert_one(
+            {
+                "_id": file_id,
+                "employee_code": employee["_id"],
+                "fid": fid,
+                "name": filename,
+                "content_type": file.content_type,
+            }
+        )
     except Exception:
-        try: await seaweed_delete(fid)
-        except httpx.HTTPError: pass
+        try:
+            await seaweed_delete(fid)
+        except httpx.HTTPError:
+            pass
         raise
+
     return {"id": file_id, "name": filename}
 
 
@@ -72,9 +132,26 @@ async def attachment(file_id: str, employee=Depends(current_employee), database=
 
 
 @router.post("/leaves", status_code=201)
-async def create_leave(data: LiffLeaveCreate, employee=Depends(current_employee), database=Depends(db)):
-    try: request_id, days = await submit_leave(database, employee["_id"], data.leave_type, data.start_date, data.end_date, data.reason, source_event_id=f"liff:{employee['_id']}:{data.request_key}", attachment_id=data.attachment_id, half_day=data.half_day)
-    except ValueError: raise HTTPException(status_code=422, detail="รูปแบบวันที่ไม่ถูกต้อง")
+async def create_leave(
+    data: LiffLeaveCreate,
+    employee=Depends(current_employee),
+    database=Depends(db),
+):
+    try:
+        request_id, days = await submit_leave(
+            database,
+            employee["_id"],
+            data.leave_type,
+            data.start_date,
+            data.end_date,
+            data.reason,
+            source_event_id=f"liff:{employee['_id']}:{data.request_key}",
+            attachment_id=data.attachment_id,
+            half_day=data.half_day,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="รูปแบบวันที่ไม่ถูกต้อง") from error
+
     return {"id": request_id, "days": days, "status": "pending"}
 
 
