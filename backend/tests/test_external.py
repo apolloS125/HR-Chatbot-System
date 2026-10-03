@@ -8,9 +8,11 @@ import pytest
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from app import intent, knowledge, line_client
+from app import intent, knowledge, liff, line_client
+from app.core import read_liff_token
 from app.knowledge import document_chunks
 from app.privacy import mask_text
+from app.schemas import LiffSessionCreate
 
 
 def mock_http(monkeypatch, handler):
@@ -110,6 +112,28 @@ def test_line_accepts_already_accepted_retry_key(monkeypatch):
         return httpx.Response(409, headers={"x-line-accepted-request-id": "accepted-1"})
     mock_http(monkeypatch, handler)
     asyncio.run(line_client.multicast_line(["U123"], {"type": "text", "text": "ประกาศ"}, "persistent-key"))
+
+
+def test_liff_session_uses_line_verified_id_token(monkeypatch):
+    monkeypatch.setattr(liff, "LIFF_CHANNEL_ID", "liff-channel")
+    employee_queries = []
+
+    async def find_employee(query):
+        employee_queries.append(query)
+        return {"_id": "E001", "name": "Employee"}
+
+    def handler(request):
+        assert str(request.url) == "https://api.line.me/oauth2/v2.1/verify"
+        assert request.content == b"id_token=client-id-token&client_id=liff-channel"
+        return httpx.Response(200, json={"sub": "U123"})
+
+    mock_http(monkeypatch, handler)
+    database = SimpleNamespace(employees=SimpleNamespace(find_one=find_employee))
+    result = asyncio.run(liff.create_session(LiffSessionCreate(id_token="client-id-token"), database))
+
+    assert result["name"] == "Employee"
+    assert read_liff_token(result["token"]) == "U123"
+    assert employee_queries == [{"line_user_id": "U123", "active": True}]
 
 
 def test_document_chunks_keep_overlapping_text_and_page_sources():

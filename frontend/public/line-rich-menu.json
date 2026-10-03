@@ -1,50 +1,15 @@
 {
   "size": { "width": 2500, "height": 1686 },
   "selected": true,
-  "name": "HR + Cyber Care",
-  "chatBarText": "เมนู HR / AI",
+  "name": "HR Self Service",
+  "chatBarText": "เมนู HR",
   "areas": [
     {
-      "bounds": { "x": 0, "y": 0, "width": 1250, "height": 843 },
+      "bounds": { "x": 0, "y": 0, "width": 2500, "height": 1686 },
       "action": {
         "type": "uri",
         "label": "เปิดระบบ HR",
         "uri": "https://liff.line.me/2011084376-DmPYtN8S"
-      }
-    },
-    {
-      "bounds": { "x": 1250, "y": 0, "width": 1250, "height": 843 },
-      "action": {
-        "type": "postback",
-        "label": "ถาม AI",
-        "data": "menu=ask",
-        "inputOption": "openKeyboard"
-      }
-    },
-    {
-      "bounds": { "x": 0, "y": 843, "width": 834, "height": 843 },
-      "action": {
-        "type": "postback",
-        "label": "เล่าเหตุการณ์",
-        "data": "menu=incident",
-        "inputOption": "openKeyboard",
-        "fillInText": "ฉันเจอเหตุการณ์: "
-      }
-    },
-    {
-      "bounds": { "x": 834, "y": 843, "width": 833, "height": 843 },
-      "action": {
-        "type": "message",
-        "label": "ตัวอย่างคำถาม",
-        "text": "ตัวอย่างคำถาม"
-      }
-    },
-    {
-      "bounds": { "x": 1667, "y": 843, "width": 833, "height": 843 },
-      "action": {
-        "type": "message",
-        "label": "เริ่มแชตใหม่",
-        "text": "เริ่มแชตใหม่"
       }
     }
   ]

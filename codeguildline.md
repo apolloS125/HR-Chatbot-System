@@ -36,6 +36,7 @@ result = await database.employees.update_one(
 - Give exported functions and shared data types explicit types where they help callers.
 - Keep JSX readable; move repeated or stateful UI into a component only when that makes the screen simpler.
 - Handle loading, success, and error states clearly. Keep user-facing text understandable and localized consistently with nearby UI.
+- Use the official `@line/liff` SDK. Initialize it before calling LIFF APIs, preserve its query parameters until initialization finishes, and verify ID tokens on the server instead of trusting browser-supplied profile data.
 
 ## Before finishing
 
