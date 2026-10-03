@@ -1,4 +1,5 @@
 from datetime import date
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -14,7 +15,7 @@ class EmployeeCreate(BaseModel):
     @field_validator("employee_code")
     @classmethod
     def valid_code(cls, value):
-        import re
+
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", value):
             raise ValueError("รหัสพนักงานใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข _ และ -")
         return value.upper()
@@ -22,7 +23,7 @@ class EmployeeCreate(BaseModel):
     @field_validator("work_email")
     @classmethod
     def valid_email(cls, value):
-        import re
+
         value = value.strip().lower()
         if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
             raise ValueError("อีเมลไม่ถูกต้อง")

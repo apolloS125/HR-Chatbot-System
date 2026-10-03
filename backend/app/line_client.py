@@ -6,11 +6,13 @@ from fastapi import HTTPException
 
 from .core import LINE_CHANNEL_ACCESS_TOKEN
 
+
 def announcement_date(value: datetime | None) -> str:
     value = value or datetime.now(ZoneInfo("Asia/Bangkok"))
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(ZoneInfo("Asia/Bangkok")).strftime("%d/%m/%Y · %H:%M น.")
+
 
 def announcement_bubble(
     title: str,
@@ -38,13 +40,15 @@ def announcement_bubble(
                             "cornerRadius": "12px",
                             "paddingAll": "6px",
                             "flex": 0,
-                            "contents": [{
-                                "type": "text",
-                                "text": "HR UPDATE",
-                                "color": "#0F5132",
-                                "weight": "bold",
-                                "size": "xxs",
-                            }],
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "HR UPDATE",
+                                    "color": "#0F5132",
+                                    "weight": "bold",
+                                    "size": "xxs",
+                                }
+                            ],
                         },
                         {
                             "type": "text",
@@ -120,6 +124,7 @@ def announcement_bubble(
         },
     }
 
+
 def announcement_message(
     title: str,
     body: str,
@@ -131,6 +136,7 @@ def announcement_message(
         "contents": announcement_bubble(title, body, published_at),
     }
 
+
 def announcement_carousel(rows: list[dict[str, object]]) -> dict[str, object]:
     bubbles = [
         announcement_bubble(row["title"], row["body"], row["published_at"])
@@ -139,13 +145,23 @@ def announcement_carousel(rows: list[dict[str, object]]) -> dict[str, object]:
     return {
         "type": "flex",
         "altText": "ประกาศล่าสุดจากบริษัท",
-        "contents": bubbles[0] if len(bubbles) == 1 else {"type": "carousel", "contents": bubbles},
+        "contents": (
+            bubbles[0]
+            if len(bubbles) == 1
+            else {"type": "carousel", "contents": bubbles}
+        ),
     }
+
 
 async def reply_line(reply_token: str, message: str | dict[str, object]) -> None:
     if not LINE_CHANNEL_ACCESS_TOKEN:
         return
-    line_message = {"type": "text", "text": message[:5000]} if isinstance(message, str) else message
+
+    if isinstance(message, str):
+        line_message = {"type": "text", "text": message[:5000]}
+    else:
+        line_message = message
+
     async with httpx.AsyncClient(timeout=10) as client:
         response = await client.post(
             "https://api.line.me/v2/bot/message/reply",
@@ -154,11 +170,20 @@ async def reply_line(reply_token: str, message: str | dict[str, object]) -> None
         )
         response.raise_for_status()
 
+
 async def send_line(path: str, payload: dict, retry_key: str) -> None:
     if not LINE_CHANNEL_ACCESS_TOKEN:
         raise HTTPException(status_code=503, detail="LINE Messaging API is not configured")
+
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post(f"https://api.line.me/v2/bot/message/{path}", headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}", "X-Line-Retry-Key": retry_key}, json=payload)
+        response = await client.post(
+            f"https://api.line.me/v2/bot/message/{path}",
+            headers={
+                "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+                "X-Line-Retry-Key": retry_key,
+            },
+            json=payload,
+        )
         if response.status_code == 409 and response.headers.get("x-line-accepted-request-id"):
             return
         response.raise_for_status()
@@ -169,4 +194,8 @@ async def multicast_line(user_ids: list[str], message: dict, retry_key: str) -> 
 
 
 async def push_line(user_id: str, message: str, retry_key: str) -> None:
-    await send_line("push", {"to": user_id, "messages": [{"type": "text", "text": message[:5000]}]}, retry_key)
+    payload = {
+        "to": user_id,
+        "messages": [{"type": "text", "text": message[:5000]}],
+    }
+    await send_line("push", payload, retry_key)

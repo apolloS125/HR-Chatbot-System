@@ -1,5 +1,5 @@
-import base64
 import asyncio
+import base64
 import hashlib
 import hmac
 import logging
@@ -38,8 +38,15 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "openai/gpt-6-luna")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if any(value in {"", "change-me"} or value.startswith("change-this-") for value in (ADMIN_API_KEY, LIFF_SESSION_SECRET, HR_PASSWORD)):
-        raise RuntimeError("Configure ADMIN_API_KEY, LIFF_SESSION_SECRET and HR_PASSWORD before starting")
+    required_secrets = (ADMIN_API_KEY, LIFF_SESSION_SECRET, HR_PASSWORD)
+    if any(
+        value in {"", "change-me"} or value.startswith("change-this-")
+        for value in required_secrets
+    ):
+        raise RuntimeError(
+            "Configure ADMIN_API_KEY, LIFF_SESSION_SECRET and HR_PASSWORD before starting"
+        )
+
     app.state.mongo_client = AsyncIOMotorClient(MONGODB_URL)
     app.state.mongo = app.state.mongo_client[MONGODB_DATABASE]
     app.state.redis = Redis.from_url(REDIS_URL, decode_responses=True)
@@ -53,8 +60,29 @@ async def lifespan(app: FastAPI):
     await app.state.mongo.leave_requests.create_index("source_event_id", unique=True, sparse=True)
     await app.state.mongo.leave_requests.create_index([("employee_code", 1), ("status", 1), ("start_date", 1)])
     await app.state.mongo.line_oauth_sessions.create_index("expires_at", expireAfterSeconds=0)
-    await app.state.mongo.employees.update_one({"_id": "E001"}, {"$setOnInsert": {"name": "พนักงานตัวอย่าง", "work_email": "employee@example.com", "role": "employee", "active": True, "balances": {"vacation": 10, "sick": 30, "personal": 5}}}, upsert=True)
-    await app.state.mongo.faqs.update_one({"_id": "work-hours"}, {"$setOnInsert": {"keyword": "เวลาทำงาน", "question": "บริษัททำงานกี่โมง", "answer": "เวลาทำงานปกติคือ 09:00–18:00 น. วันจันทร์ถึงวันศุกร์", "active": True}}, upsert=True)
+    sample_employee = {
+        "name": "พนักงานตัวอย่าง",
+        "work_email": "employee@example.com",
+        "role": "employee",
+        "active": True,
+        "balances": {"vacation": 10, "sick": 30, "personal": 5},
+    }
+    await app.state.mongo.employees.update_one(
+        {"_id": "E001"},
+        {"$setOnInsert": sample_employee},
+        upsert=True,
+    )
+    sample_faq = {
+        "keyword": "เวลาทำงาน",
+        "question": "บริษัททำงานกี่โมง",
+        "answer": "เวลาทำงานปกติคือ 09:00–18:00 น. วันจันทร์ถึงวันศุกร์",
+        "active": True,
+    }
+    await app.state.mongo.faqs.update_one(
+        {"_id": "work-hours"},
+        {"$setOnInsert": sample_faq},
+        upsert=True,
+    )
     # Weaviate is a rebuildable index, never source of truth.
     try:
         policies = [policy async for policy in app.state.mongo.faqs.find({"active": True})]
@@ -70,8 +98,10 @@ async def lifespan(app: FastAPI):
 async def db(request: Request) -> AsyncIOMotorDatabase:
     return request.app.state.mongo
 
+
 async def cache(request: Request) -> Redis:
     return request.app.state.redis
+
 
 def hash_password(password: str) -> str:
     salt = os.urandom(16)
@@ -82,20 +112,34 @@ def hash_password(password: str) -> str:
 def check_password(password: str, stored: str) -> bool:
     try:
         salt, expected = stored.split(":", 1)
-        actual = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=16384, r=8, p=1)
+        actual = hashlib.scrypt(
+            password.encode(),
+            salt=bytes.fromhex(salt),
+            n=16384,
+            r=8,
+            p=1,
+        )
         return hmac.compare_digest(actual.hex(), expected)
     except (ValueError, TypeError):
         return False
 
 
-async def require_admin(x_admin_key: Annotated[str | None, Header()] = None, authorization: Annotated[str | None, Header()] = None, database=Depends(db)):
+async def require_admin(
+    x_admin_key: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+    database=Depends(db),
+):
     if authorization and authorization.startswith("Basic "):
         try:
             username, password = base64.b64decode(authorization[6:], validate=True).decode().split(":", 1)
         except (ValueError, UnicodeDecodeError):
             raise HTTPException(status_code=401, detail="invalid credentials")
-        if hmac.compare_digest(username.encode(), HR_USERNAME.encode()) and hmac.compare_digest(password.encode(), HR_PASSWORD.encode()):
+        valid_hr_login = hmac.compare_digest(
+            username.encode(), HR_USERNAME.encode()
+        ) and hmac.compare_digest(password.encode(), HR_PASSWORD.encode())
+        if valid_hr_login:
             return {"id": HR_USERNAME, "role": "admin"}
+
         employee = await database.employees.find_one({"_id": username.upper(), "active": True})
         if employee and check_password(password, employee.get("password_hash", "")):
             if employee["role"] not in {"hr", "admin"}:
@@ -113,7 +157,14 @@ async def transaction(database, operation):
 
 async def audit(database, actor, action, subject, session=None):
     from datetime import datetime, timezone
-    await database.audit_logs.insert_one({"actor": actor["id"], "action": action, "subject": subject, "created_at": datetime.now(timezone.utc)}, session=session)
+
+    record = {
+        "actor": actor["id"],
+        "action": action,
+        "subject": subject,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await database.audit_logs.insert_one(record, session=session)
 
 
 def document_view(item):
@@ -122,6 +173,7 @@ def document_view(item):
     if not result.get("attachment_id") and item.get("attachment_url"):
         # Read legacy attachments without returning the expired session token.
         from urllib.parse import urlsplit
+
         match = re.fullmatch(r"/api/liff/attachments/(F-[a-f0-9]+)", urlsplit(item["attachment_url"]).path)
         if match:
             result["attachment_id"] = match[1]
@@ -131,16 +183,27 @@ def document_view(item):
 async def file_response(database, file_id, employee_code=None):
     from fastapi.responses import Response
     from urllib.parse import quote
+
     query = {"_id": file_id}
     if employee_code:
         query["employee_code"] = employee_code
     file = await database.files.find_one(query)
     if not file:
         raise HTTPException(status_code=404, detail="ไม่พบเอกสาร")
-    return Response(await seaweed_read(file["fid"]), media_type=file["content_type"], headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file['name'])}", "Cache-Control": "private, no-store"})
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(file['name'])}",
+        "Cache-Control": "private, no-store",
+    }
+    return Response(
+        await seaweed_read(file["fid"]),
+        media_type=file["content_type"],
+        headers=headers,
+    )
+
 
 def sha256(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
 
 def base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
@@ -149,33 +212,44 @@ def valid_line_signature(body: bytes, signature: str | None) -> bool:
     expected = base64.b64encode(hmac.new(LINE_CHANNEL_SECRET.encode(), body, hashlib.sha256).digest()).decode()
     return bool(signature and LINE_CHANNEL_SECRET and hmac.compare_digest(expected, signature))
 
+
 def issue_liff_token(line_user_id: str) -> str:
     payload = base64url(f"{line_user_id}:{int(time.time()) + 3600}".encode())
     signature = base64url(hmac.new(LIFF_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).digest())
     return f"{payload}.{signature}"
 
+
 def read_liff_token(token: str) -> str | None:
     try:
         payload, signature = token.split(".", 1)
         expected = base64url(hmac.new(LIFF_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).digest())
-        user_id, expires_at = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)).decode().rsplit(":", 1)
+        decoded = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)).decode()
+        user_id, expires_at = decoded.rsplit(":", 1)
         return user_id if hmac.compare_digest(signature, expected) and int(expires_at) >= time.time() else None
     except (ValueError, UnicodeDecodeError):
         return None
+
 
 async def seaweed_upload(name: str, content: bytes, content_type: str) -> str:
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(f"{SEAWEED_MASTER_URL}/dir/assign")
         response.raise_for_status()
         assigned = response.json()
-        upload = await client.post(f"http://{assigned['url']}/{assigned['fid']}", files={"file": (name, content, content_type)})
+        upload_url = f"http://{assigned['url']}/{assigned['fid']}"
+        upload = await client.post(
+            upload_url,
+            files={"file": (name, content, content_type)},
+        )
         upload.raise_for_status()
     return assigned["fid"]
 
 
 async def seaweed_location(fid: str) -> str:
     async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(f"{SEAWEED_MASTER_URL}/dir/lookup", params={"volumeId": fid.partition(",")[0]})
+        response = await client.get(
+            f"{SEAWEED_MASTER_URL}/dir/lookup",
+            params={"volumeId": fid.partition(",")[0]},
+        )
         response.raise_for_status()
         return response.json()["locations"][0]["url"]
 

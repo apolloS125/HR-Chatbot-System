@@ -8,7 +8,14 @@ import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from .core import LINE_LOGIN_CHANNEL_ID, LINE_LOGIN_CHANNEL_SECRET, PUBLIC_BASE_URL, base64url, db, sha256
+from .core import (
+    LINE_LOGIN_CHANNEL_ID,
+    LINE_LOGIN_CHANNEL_SECRET,
+    PUBLIC_BASE_URL,
+    base64url,
+    db,
+    sha256,
+)
 
 router = APIRouter(prefix="/auth/line")
 
@@ -75,7 +82,11 @@ async def line_login_prompt(employee_code: str, link_code: str, database=Depends
 
 
 @router.post("/start")
-async def line_login_start(employee_code: str = Form(), link_code: str = Form(), database=Depends(db)):
+async def line_login_start(
+    employee_code: str = Form(),
+    link_code: str = Form(),
+    database=Depends(db),
+):
     if not LINE_LOGIN_CHANNEL_ID or not LINE_LOGIN_CHANNEL_SECRET:
         raise HTTPException(status_code=503, detail="LINE Login is not configured")
 
@@ -115,7 +126,8 @@ async def line_login_start(employee_code: str = Form(), link_code: str = Form(),
             "code_challenge_method": "S256",
         }
     )
-    return RedirectResponse(f"https://access.line.me/oauth2/v2.1/authorize?{query}", status_code=303)
+    authorize_url = f"https://access.line.me/oauth2/v2.1/authorize?{query}"
+    return RedirectResponse(authorize_url, status_code=303)
 
 
 @router.get("/callback", response_class=HTMLResponse)

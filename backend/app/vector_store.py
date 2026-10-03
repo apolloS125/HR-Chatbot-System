@@ -27,16 +27,44 @@ def embed_text(text: str) -> list[float]:
 async def ensure_policy_index(client: httpx.AsyncClient, policies: list[dict]) -> None:
     schema = await client.get(f"/v1/schema/{POLICY_CLASS}")
     if schema.status_code == 404:
-        created = await client.post("/v1/schema", json={"class": POLICY_CLASS, "vectorizer": "none", "properties": [{"name": "mongoId", "dataType": ["text"]}]})
+        created = await client.post(
+            "/v1/schema",
+            json={
+                "class": POLICY_CLASS,
+                "vectorizer": "none",
+                "properties": [{"name": "mongoId", "dataType": ["text"]}],
+            },
+        )
         created.raise_for_status()
     elif schema.is_error:
         schema.raise_for_status()
+
     for offset in range(0, len(policies), 32):
         batch = policies[offset:offset + 32]
-        texts = [f"{policy.get('keyword', '')} {policy.get('question', '')} {policy['answer']}" for policy in batch]
+        texts = [
+            f"{policy.get('keyword', '')} {policy.get('question', '')} {policy['answer']}"
+            for policy in batch
+        ]
         vectors = await policy_vectors(texts)
-        objects = [{"id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"hr-policy:{POLICY_CLASS}:{policy['_id']}")), "class": POLICY_CLASS, "properties": {"mongoId": policy["_id"]}, "vector": vector} for policy, vector in zip(batch, vectors)]
-        response = await client.post("/v1/batch/objects", json={"objects": objects})
+        objects = []
+        for policy, vector in zip(batch, vectors):
+            object_id = uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"hr-policy:{POLICY_CLASS}:{policy['_id']}",
+            )
+            objects.append(
+                {
+                    "id": str(object_id),
+                    "class": POLICY_CLASS,
+                    "properties": {"mongoId": policy["_id"]},
+                    "vector": vector,
+                }
+            )
+
+        response = await client.post(
+            "/v1/batch/objects",
+            json={"objects": objects},
+        )
         response.raise_for_status()
         if any(item.get("result", {}).get("errors") for item in response.json()):
             raise ValueError("policy batch indexing failed")
@@ -45,20 +73,41 @@ async def ensure_policy_index(client: httpx.AsyncClient, policies: list[dict]) -
 async def policy_vectors(texts: list[str]) -> list[list[float]]:
     if not OPENAI_API_KEY:
         return [embed_text(text) for text in texts]
+
     # ponytail: index the first 1500 characters per FAQ; split longer policies into document chunks.
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post("https://api.openai.com/v1/embeddings", headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}, json={"model": "text-embedding-3-small", "input": [mask_text(text)[:1500] for text in texts], "dimensions": VECTOR_SIZE})
+        response = await client.post(
+            "https://api.openai.com/v1/embeddings",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            json={
+                "model": "text-embedding-3-small",
+                "input": [mask_text(text)[:1500] for text in texts],
+                "dimensions": VECTOR_SIZE,
+            },
+        )
         response.raise_for_status()
-        vectors = [item["embedding"] for item in sorted(response.json()["data"], key=lambda item: item["index"])]
+        embeddings = sorted(
+            response.json()["data"],
+            key=lambda item: item["index"],
+        )
+        vectors = [item["embedding"] for item in embeddings]
         if len(vectors) != len(texts) or any(len(vector) != VECTOR_SIZE for vector in vectors):
             raise ValueError("invalid embedding response")
+
         return vectors
 
 
 async def search_policy(client: httpx.AsyncClient, question: str) -> list[str]:
     vector = json.dumps((await policy_vectors([question]))[0], separators=(",", ":"))
-    query = "{Get{" + POLICY_CLASS + "(nearVector:{vector:" + vector + ",distance:0.75},limit:3){mongoId _additional{distance}}}}"
-    response = await client.post("/v1/graphql", json={"query": query})
+    query = (
+        f"{{Get{{{POLICY_CLASS}"
+        f"(nearVector:{{vector:{vector},distance:0.75}},limit:3)"
+        "{mongoId _additional{distance}}}}"
+    )
+    response = await client.post(
+        "/v1/graphql",
+        json={"query": query},
+    )
     response.raise_for_status()
     rows = response.json().get("data", {}).get("Get", {}).get(POLICY_CLASS, [])
     return list(dict.fromkeys(row["mongoId"] for row in rows))

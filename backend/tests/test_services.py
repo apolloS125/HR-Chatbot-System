@@ -2,8 +2,8 @@ import asyncio
 import json
 from datetime import date
 
-import pytest
 import httpx
+import pytest
 from fastapi import HTTPException
 
 from app.admin import decide_leave, document_view
@@ -21,11 +21,16 @@ def test_liff_token_is_signed_and_rejects_tampering():
 
 
 def test_tool_registry_only_calls_registered_tools():
-    async def handler(arguments): return {"employee": arguments["employee"]}
+    async def handler(arguments):
+        return {"employee": arguments["employee"]}
+
     register_tool("directory_lookup", handler)
     assert any(item["name"] == "directory_lookup" for item in tool_definitions())
-    assert asyncio.run(call_tool("directory_lookup", {"employee": "E001"})) == {"employee": "E001"}
-    with pytest.raises(ValueError): asyncio.run(call_tool("unknown", {}))
+    result = asyncio.run(call_tool("directory_lookup", {"employee": "E001"}))
+    assert result == {"employee": "E001"}
+
+    with pytest.raises(ValueError):
+        asyncio.run(call_tool("unknown", {}))
 
 
 def test_embedding_is_stable_and_normalized():
@@ -38,19 +43,38 @@ def test_embedding_is_stable_and_normalized():
 
 def test_weaviate_index_and_near_vector_query():
     requests = []
+
     def handler(request):
         requests.append(request)
-        if request.method == "GET": return httpx.Response(404)
-        if request.url.path == "/v1/graphql": return httpx.Response(200, json={"data": {"Get": {"HrPolicy": [{"mongoId": "work-hours"}]}}})
-        if request.url.path == "/v1/batch/objects": return httpx.Response(200, json=[{"result": {"status": "SUCCESS"}}])
+        if request.method == "GET":
+            return httpx.Response(404)
+        if request.url.path == "/v1/graphql":
+            return httpx.Response(
+                200,
+                json={"data": {"Get": {"HrPolicy": [{"mongoId": "work-hours"}]}}},
+            )
+        if request.url.path == "/v1/batch/objects":
+            return httpx.Response(200, json=[{"result": {"status": "SUCCESS"}}])
         return httpx.Response(200)
+
     async def exercise():
-        async with httpx.AsyncClient(base_url="http://weaviate", transport=httpx.MockTransport(handler)) as client:
-            await ensure_policy_index(client, [{"_id": "work-hours", "keyword": "เวลาทำงาน", "question": "ทำงานกี่โมง", "answer": "09:00"}])
+        async with httpx.AsyncClient(
+            base_url="http://weaviate",
+            transport=httpx.MockTransport(handler),
+        ) as client:
+            policy = {
+                "_id": "work-hours",
+                "keyword": "เวลาทำงาน",
+                "question": "ทำงานกี่โมง",
+                "answer": "09:00",
+            }
+            await ensure_policy_index(client, [policy])
             return await search_policy(client, "เวลาทำงาน")
+
     assert asyncio.run(exercise()) == ["work-hours"]
     object_request = next(request for request in requests if request.url.path == "/v1/batch/objects")
-    assert len(json.loads(object_request.content)["objects"][0]["vector"]) == VECTOR_SIZE
+    indexed_object = json.loads(object_request.content)["objects"][0]
+    assert len(indexed_object["vector"]) == VECTOR_SIZE
     assert b"nearVector" in requests[-1].content
 
 

@@ -24,6 +24,7 @@ def test_parse_leave_command_with_only_start_date():
         "",
     )
 
+
 def test_parse_leave_rejects_reverse_dates():
     assert parse_leave_command("ขอลา ป่วย 2026-08-21 2026-08-20") is None
 
@@ -37,5 +38,7 @@ def test_announcement_is_flex_card():
     assert message["type"] == "flex"
     assert message["contents"]["type"] == "bubble"
     assert message["contents"]["body"]["contents"][0]["text"] == "วันหยุดบริษัท"
-    assert message["contents"]["header"]["contents"][0]["contents"][1]["text"] == "13/08/2026 · 10:30 น."
+    header = message["contents"]["header"]
+    date_label = header["contents"][0]["contents"][1]["text"]
+    assert date_label == "13/08/2026 · 10:30 น."
     assert message["contents"]["footer"]["contents"][0]["action"]["text"] == "ประกาศ"
