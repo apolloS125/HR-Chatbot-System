@@ -84,6 +84,11 @@ export function LiffView({
   }).format(new Date()));
 
   useEffect(() => {
+    setStartDate("");
+    setFilename("");
+  }, [tab]);
+
+  useEffect(() => {
     if (message && token) {
       notice.current?.scrollIntoView({ block: "nearest" });
     }
