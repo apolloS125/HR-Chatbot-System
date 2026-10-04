@@ -17,6 +17,9 @@ export function LiffApp() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [message, setMessage] = useState("กำลังเชื่อมต่อ LINE...");
   const [pending, setPending] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [messageType, setMessageType] = useState<"info" | "success" | "error">("info");
+  const loadVersion = useRef(0);
   const busy = useRef(false);
   const request = useRef({ key: "", fingerprint: "", attachment_id: "" });
 
@@ -31,7 +34,9 @@ export function LiffApp() {
         }
 
         await liff.init({ liffId });
-        if (disposed) return;
+        if (disposed) {
+          return;
+        }
 
         if (!liff.isLoggedIn()) {
           liff.login();
@@ -60,6 +65,7 @@ export function LiffApp() {
         }
       } catch (error) {
         if (!disposed) {
+          setMessageType("error");
           setMessage(error instanceof Error ? error.message : "เชื่อมต่อ LINE ไม่สำเร็จ");
         }
       }
@@ -95,31 +101,55 @@ export function LiffApp() {
   }
 
   async function open(next: LiffTab) {
+    const version = ++loadVersion.current;
     setTab(next);
-    if (!token) return;
+    if (!token) {
+      return;
+    }
 
     setMessage("");
+    setMessageType("info");
+    setLoading(next !== "leave");
     try {
       if (next === "balance") {
-        setBalances(await api<Balance[]>("/balances"));
+        const data = await api<Balance[]>("/balances");
+        if (version === loadVersion.current) {
+          setBalances(data);
+        }
       }
       if (next === "history") {
-        setLeaves(await api<Leave[]>("/leaves"));
+        const data = await api<Leave[]>("/leaves");
+        if (version === loadVersion.current) {
+          setLeaves(data);
+        }
       }
       if (next === "news") {
-        setAnnouncements(await api<Announcement[]>("/announcements"));
+        const data = await api<Announcement[]>("/announcements");
+        if (version === loadVersion.current) {
+          setAnnouncements(data);
+        }
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "โหลดข้อมูลไม่สำเร็จ");
+      if (version === loadVersion.current) {
+        setMessageType("error");
+        setMessage(error instanceof Error ? error.message : "โหลดข้อมูลไม่สำเร็จ");
+      }
+    } finally {
+      if (version === loadVersion.current) {
+        setLoading(false);
+      }
     }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy.current) return;
+    if (busy.current || !token) {
+      return;
+    }
 
     busy.current = true;
     setPending(true);
+    setMessage("");
     const element = event.currentTarget;
     const form = new FormData(element);
     const file = form.get("attachment");
@@ -164,8 +194,10 @@ export function LiffApp() {
       });
       element.reset();
       request.current = { key: "", fingerprint: "", attachment_id: "" };
+      setMessageType("success");
       setMessage(`ส่งคำขอลา #${result.id} แล้ว (${result.days} วัน)`);
     } catch (error) {
+      setMessageType("error");
       setMessage(error instanceof Error ? error.message : "ส่งคำขอลาไม่สำเร็จ");
     } finally {
       busy.current = false;
@@ -174,14 +206,26 @@ export function LiffApp() {
   }
 
   async function cancel(id: string) {
-    if (!window.confirm("ยกเลิกคำขอลานี้ใช่หรือไม่?")) return;
+    if (busy.current) {
+      return;
+    }
+    if (!window.confirm("ยกเลิกคำขอลานี้ใช่หรือไม่?")) {
+      return;
+    }
 
+    busy.current = true;
+    setPending(true);
     try {
       await api(`/leaves/${id}/cancel`, { method: "POST" });
       setLeaves(await api<Leave[]>("/leaves"));
+      setMessageType("success");
       setMessage("ยกเลิกคำขอแล้ว");
     } catch (error) {
+      setMessageType("error");
       setMessage(error instanceof Error ? error.message : "ยกเลิกไม่สำเร็จ");
+    } finally {
+      busy.current = false;
+      setPending(false);
     }
   }
 
@@ -202,6 +246,7 @@ export function LiffApp() {
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
+      setMessageType("error");
       setMessage(error instanceof Error ? error.message : "เปิดเอกสารไม่ได้");
     }
   }
@@ -213,6 +258,9 @@ export function LiffApp() {
       tab={tab}
       message={message}
       pending={pending}
+      loading={loading}
+      messageType={messageType}
+      retry={() => token ? void open(tab) : window.location.reload()}
       balances={balances}
       leaves={leaves}
       announcements={announcements}

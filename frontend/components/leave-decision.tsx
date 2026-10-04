@@ -32,7 +32,7 @@ export function LeaveDecisionForm({
       <button
         type="button"
         onClick={() => dialog.current?.showModal()}
-        className="min-h-8 rounded-lg bg-[#e7f5ed] px-2.5 text-[11px] font-bold text-[#087747]"
+        className="min-h-11 whitespace-nowrap rounded-lg bg-[#e7f5ed] px-3 text-sm font-bold text-[#087747] hover:bg-[#d8eddf]"
       >
         พิจารณาคำขอ
       </button>
@@ -49,7 +49,7 @@ export function LeaveDecisionForm({
             type="button"
             onClick={() => dialog.current?.close()}
             aria-label="ปิดหน้าต่าง"
-            className="rounded-lg px-3 py-1 text-xl text-[#6d7a72]"
+            className="min-h-11 min-w-11 rounded-lg text-xl text-[#6d7a72]"
           >
             ×
           </button>
@@ -80,7 +80,7 @@ export function LeaveDecisionForm({
               name="decision"
               value="approved"
               disabled={pending}
-              className="min-h-10 rounded-lg bg-[#087747] px-4 font-bold text-white disabled:opacity-50"
+              className="min-h-11 flex-1 rounded-lg bg-[#087747] px-4 font-bold text-white disabled:opacity-50"
             >
               อนุมัติ
             </button>
@@ -88,7 +88,7 @@ export function LeaveDecisionForm({
               name="decision"
               value="rejected"
               disabled={pending}
-              className="min-h-10 rounded-lg bg-[#f8eded] px-4 font-bold text-[#a32727] disabled:opacity-50"
+              className="min-h-11 flex-1 rounded-lg bg-[#f8eded] px-4 font-bold text-[#a32727] disabled:opacity-50"
             >
               ปฏิเสธ
             </button>

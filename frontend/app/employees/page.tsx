@@ -9,20 +9,30 @@ import {
 import { InviteButton } from "../../components/invite-button";
 import { get, type Employee } from "../../lib/api";
 
+const roleLabels: Record<string, string> = {
+  employee: "พนักงาน",
+  hr: "HR",
+  admin: "ผู้ดูแลระบบ",
+};
+
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ show_inactive?: string }>;
+  searchParams: Promise<{ show_inactive?: string; q?: string }>;
 }) {
   const [employees, actor] = await Promise.all([
     get<Employee[]>("/api/admin/employees"),
     get<{ id: string; role: string }>("/api/admin/session"),
   ]);
-  const showInactive = (await searchParams).show_inactive === "1";
+  const params = await searchParams;
+  const showInactive = params.show_inactive === "1";
+  const query = params.q?.trim() ?? "";
   const inactiveCount = employees.filter((employee) => !employee.active).length;
-  const visibleEmployees = showInactive
-    ? employees
-    : employees.filter((employee) => employee.active);
+  const visibleEmployees = employees.filter((employee) => {
+    const matchesStatus = showInactive || employee.active;
+    const searchable = `${employee.name} ${employee.employee_code} ${employee.work_email}`;
+    return matchesStatus && searchable.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+  });
   const canManageRoles = actor.role === "admin";
 
   return (
@@ -46,7 +56,7 @@ export default async function EmployeesPage({
           {inactiveCount > 0 && (
             <Link
               className="text-xs font-semibold text-[#087747]"
-              href={showInactive ? "/employees" : "/employees?show_inactive=1"}
+              href={`/employees?${new URLSearchParams({ q: query, show_inactive: showInactive ? "0" : "1" })}`}
             >
               {showInactive
                 ? "ซ่อนพนักงานที่ปิดใช้งาน"
@@ -56,15 +66,35 @@ export default async function EmployeesPage({
         </div>
       </header>
 
-      <section className="mb-[18px] overflow-hidden rounded-2xl border border-[#e1e9e3] bg-white shadow-[0_10px_30px_#264c3510]">
-        <div className="flex min-h-[74px] items-center border-b border-[#eaf0eb] px-5 py-4">
+      <details className="mb-[18px] overflow-hidden rounded-2xl border border-[#e1e9e3] bg-white shadow-[0_10px_30px_#264c3510]">
+        <summary className="min-h-[74px] cursor-pointer px-5 py-4 text-[#087747]">
           <div>
             <h2 className="mb-1 text-base font-bold">เพิ่มพนักงาน</h2>
             <p className="text-xs text-[#6d7a72]">สร้างบัญชีก่อนออกลิงก์ยืนยันตัวตน</p>
           </div>
-        </div>
+        </summary>
         <EmployeeForm canManageRoles={canManageRoles} />
-      </section>
+      </details>
+
+      <form className="mb-5 flex flex-wrap items-end gap-3" role="search">
+        {showInactive && <input type="hidden" name="show_inactive" value="1" />}
+        <label className="min-w-0 flex-1 text-sm font-semibold">
+          ค้นหาพนักงาน
+          <input
+            className="mt-1.5 min-h-11 w-full rounded-xl border border-[#cad7ce] bg-white px-3 font-normal"
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="ชื่อ รหัสพนักงาน หรืออีเมล"
+          />
+        </label>
+        <button className="min-h-11 rounded-xl bg-[#087747] px-5 text-sm font-bold text-white">ค้นหา</button>
+        {query && (
+          <Link href={showInactive ? "/employees?show_inactive=1" : "/employees"} className="flex min-h-11 items-center text-sm text-[#087747]">
+            ล้างการค้นหา
+          </Link>
+        )}
+      </form>
 
       <section className="grid grid-cols-3 gap-3.5 max-xl:grid-cols-2 max-sm:grid-cols-1">
         {visibleEmployees.map((employee) => (
@@ -79,7 +109,7 @@ export default async function EmployeesPage({
               <div className="min-w-0">
                 <b className="block truncate">{employee.name}</b>
                 <small className="mt-0.5 block text-xs text-[#6d7a72]">
-                  {employee.employee_code} · {employee.role}
+                  {employee.employee_code} · {roleLabels[employee.role] ?? employee.role}
                 </small>
               </div>
             </div>
@@ -100,7 +130,7 @@ export default async function EmployeesPage({
                 </span>
               )}
             </div>
-            <div className="mt-auto flex items-end justify-between gap-2.5 border-t border-[#edf1ee] pt-3.5">
+            <div className="mt-auto flex flex-wrap items-end justify-between gap-2.5 border-t border-[#edf1ee] pt-3.5">
               {employee.active &&
                 !employee.line_linked &&
                 (canManageRoles || employee.role === "employee") && (
@@ -124,7 +154,7 @@ export default async function EmployeesPage({
         ))}
         {!visibleEmployees.length && (
           <div className="col-span-full rounded-2xl border border-[#e1e9e3] bg-white p-10 text-center text-sm text-[#6d7a72]">
-            {showInactive ? "ยังไม่มีพนักงานในระบบ" : "ไม่มีพนักงานที่เปิดใช้งาน"}
+            {query ? "ไม่พบพนักงาน ลองค้นหาด้วยชื่อ รหัส หรืออีเมลอื่น" : showInactive ? "ยังไม่มีพนักงานในระบบ เริ่มจากเพิ่มพนักงานด้านบน" : "ไม่มีพนักงานที่เปิดใช้งาน"}
           </div>
         )}
       </section>

@@ -5,7 +5,7 @@ import { previewAnswer, reindexPolicies, saveFaq, uploadPolicy } from "../app/ac
 
 export type Faq = { id: string; keyword: string; question: string; answer: string; active: boolean };
 const initial = { message: "", error: "" };
-const field = "mt-1 w-full rounded-lg border p-2";
+const field = "mt-1.5 min-h-11 w-full rounded-lg border border-[#cad7ce] bg-white px-3 py-2.5";
 
 export function FaqForm({ faq }: { faq?: Faq }) {
   const [state, action, pending] = useActionState(saveFaq, initial);
@@ -37,5 +37,20 @@ export function ReindexButton() {
 
 export function AnswerPreview() {
   const [state, action, pending] = useActionState(previewAnswer, initial);
-  return <form action={action} className="my-6 grid gap-3 rounded-xl bg-white p-4"><label>ทดสอบคำตอบแชทบอท<input className={field} name="question" maxLength={1500} required /></label><button disabled={pending} className="rounded-lg bg-[#087747] p-2 text-white disabled:opacity-50">{pending ? "กำลังค้น…" : "ค้นคำตอบ"}</button><p role="status" className={`whitespace-pre-wrap text-sm ${state.error ? "text-red-700" : "text-[#087747]"}`}>{state.error || state.message}</p></form>;
+  return (
+    <form action={action} className="my-6 grid gap-3 rounded-2xl border border-[#e1e9e3] bg-white p-5">
+      <label className="font-semibold">
+        ทดสอบคำตอบแชทบอท
+        <input className={field} name="question" placeholder="เช่น ลาพักร้อนได้กี่วัน" maxLength={1500} required />
+      </label>
+      <button disabled={pending} className="min-h-11 rounded-lg bg-[#087747] px-4 py-2 font-semibold text-white disabled:opacity-50">
+        {pending ? "กำลังค้น…" : "ทดสอบคำตอบ"}
+      </button>
+      {(state.error || state.message) && (
+        <p role={state.error ? "alert" : "status"} className={`whitespace-pre-wrap rounded-lg bg-[#f7faf8] p-4 text-sm leading-relaxed ${state.error ? "text-red-700" : "text-[#30533e]"}`}>
+          {state.error || state.message}
+        </p>
+      )}
+    </form>
+  );
 }

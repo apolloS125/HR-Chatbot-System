@@ -27,7 +27,7 @@ export function InviteButton({ employeeId }: { employeeId: string }) {
       <form action={action}>
         <input type="hidden" name="employee_id" value={employeeId} />
         <button
-          className="min-h-9 rounded-lg bg-[#e7f5ed] px-2.5 text-xs font-bold text-[#087747] disabled:cursor-wait disabled:opacity-60"
+          className="min-h-11 rounded-lg bg-[#e7f5ed] px-3 text-sm font-bold text-[#087747] disabled:cursor-wait disabled:opacity-60"
           disabled={pending}
         >
           {pending ? "กำลังสร้าง…" : "ออกลิงก์ LINE"}
@@ -46,13 +46,13 @@ export function InviteButton({ employeeId }: { employeeId: string }) {
           <input
             ref={input}
             aria-label="ลิงก์ยืนยัน LINE"
-            className="min-w-0 flex-1 rounded-lg border border-[#cad7ce] px-2 py-1 text-[11px]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-[#cad7ce] px-3 text-sm"
             readOnly
             value={state.link}
             onFocus={(event) => event.currentTarget.select()}
           />
           <button
-            className="min-h-9 rounded-lg bg-[#e7f5ed] px-2.5 text-xs font-bold text-[#087747]"
+            className="min-h-11 rounded-lg bg-[#e7f5ed] px-3 text-sm font-bold text-[#087747]"
             type="button"
             onClick={copyLink}
           >
@@ -66,7 +66,7 @@ export function InviteButton({ employeeId }: { employeeId: string }) {
         </>
       )}
       {state.error && (
-        <small className="basis-full text-xs text-[#b32222]">{state.error}</small>
+        <small role="alert" className="basis-full text-sm text-[#b32222]">{state.error}</small>
       )}
     </div>
   );

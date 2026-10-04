@@ -1,6 +1,493 @@
 @import "tailwindcss";
 
-.dashboard-shell:has(.liff-app) { display: block; }
-body:has(.liff-app) { background: #f4f7f5; }
-body:has(.liff-app) aside { display: none; }
-body:has(.liff-app) > div { display: block; }
+.dashboard-shell:not(:has(.liff-app)) :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #17855b;
+  outline-offset: 3px;
+}
+
+.dashboard-shell button:not(:disabled) {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  .dashboard-shell:not(:has(.liff-app)) :is(input, select, textarea) {
+    font-size: 16px;
+  }
+
+  .dashboard-shell:not(:has(.liff-app)) :is(button, select, input:not([type="checkbox"]):not([type="radio"])) {
+    min-height: 44px;
+  }
+}
+.dashboard-shell:has(.liff-app) {
+  display: block;
+}
+
+body:has(.liff-app) {
+  background: #f4f7f5;
+}
+
+body:has(.liff-app) aside {
+  display: none;
+}
+
+body:has(.liff-app) > div {
+  display: block;
+}
+
+.liff-app {
+  --liff-green: #096343;
+  max-width: 560px;
+  min-height: 100dvh;
+  margin: auto;
+  background: #f3f6f4;
+  padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.liff-header {
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px 28px;
+  color: white;
+  background: radial-gradient(ellipse at top right, #26765b, transparent 70%), #123c2a;
+  border-radius: 0 0 28px 28px;
+}
+
+.liff-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .12em;
+}
+
+.liff-brand small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: .04em;
+  color: #d2e6db;
+}
+
+.liff-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #80a795;
+  border-radius: 14px;
+  font-size: 22px;
+}
+
+.liff-greeting {
+  margin-top: 28px;
+  color: #d2e6db;
+  font-size: 14px;
+}
+
+.liff-header h1 {
+  font-size: 28px;
+  font-weight: 750;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.liff-subtitle {
+  color: #d2e6db;
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+.liff-content {
+  padding: 20px 16px;
+}
+
+.liff-form, .liff-list {
+  display: grid;
+  gap: 16px;
+}
+
+.liff-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #dce6df;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 3px 12px #163f2810;
+}
+
+.liff-card h2, .liff-empty h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.liff-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.liff-section-heading > span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #e8f3ec;
+  color: var(--liff-green);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.liff-field {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 18px;
+}
+
+.liff-field input, .liff-field select, .liff-field textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #a9bcb0;
+  border-radius: 12px;
+  background: #fff;
+  color: #17241d;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.liff-field input[type="date"] {
+  appearance: none;
+}
+
+.liff-field textarea {
+  resize: vertical;
+}
+
+.liff-field textarea::placeholder {
+  color: #68796e;
+}
+
+.liff-field small {
+  display: block;
+  margin-top: 8px;
+  color: #56665c;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.liff-field input[type="file"] {
+  font-size: 14px;
+  padding: 10px;
+  background: #f7faf8;
+}
+
+.liff-field input::file-selector-button {
+  border: 0;
+  border-radius: 8px;
+  background: #e3eee7;
+  color: #174d35;
+  padding: 10px 12px;
+  margin-right: 8px;
+}
+
+.liff-optional {
+  color: #647469;
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.liff-file-name {
+  overflow-wrap: anywhere;
+}
+
+.liff-form-note {
+  color: #56665c;
+  text-align: center;
+  font-size: 13px;
+}
+
+.liff-primary, .liff-secondary, .liff-danger {
+  min-height: 48px;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.liff-primary {
+  background: var(--liff-green);
+  color: white;
+  width: 100%;
+  min-height: 54px;
+  box-shadow: 0 4px 12px #09634320;
+}
+
+.liff-secondary {
+  background: #e9f2ed;
+  color: #154d34;
+}
+
+.liff-danger {
+  background: #fff1ef;
+  color: #a12e23;
+}
+
+.liff-app button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.liff-app button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.liff-app :is(button, input, select, textarea):focus-visible {
+  outline: 3px solid #17855b;
+  outline-offset: 3px;
+}
+
+.liff-notice {
+  margin-bottom: 16px;
+  border-radius: 16px;
+  padding: 16px;
+  font-size: 14px;
+  border: 1px solid #c8d8ce;
+  background: #eaf2ee;
+}
+
+.liff-notice button {
+  margin-top: 12px;
+}
+
+.liff-notice-success {
+  background: #e8f6ed;
+  border-color: #a6d4b7;
+  color: #165632;
+}
+
+.liff-notice-error {
+  background: #fff2ef;
+  border-color: #efb7ad;
+  color: #8e2b23;
+}
+
+.liff-empty {
+  padding: 40px 20px;
+  text-align: center;
+  border: 1px dashed #c5d5ca;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.liff-empty p {
+  color: #56665c;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.liff-spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #dce9e0;
+  border-top-color: var(--liff-green);
+  border-radius: 50%;
+  animation: liff-spin 1s linear infinite;
+}
+
+.liff-year {
+  font-size: 14px;
+  font-weight: 600;
+  color: #56665c;
+}
+
+.liff-balance-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.liff-balance-card > div > p {
+  color: #56665c;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.liff-balance-number {
+  font-size: 36px;
+  font-weight: 750;
+  color: var(--liff-green);
+  line-height: 1.2;
+  text-align: right;
+}
+
+.liff-balance-number small {
+  font-size: 14px;
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.liff-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.liff-badge {
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 650;
+  background: #edf1ee;
+  color: #4e5d54;
+}
+
+.liff-badge-pending {
+  color: #80520a;
+  background: #fff1cf;
+}
+
+.liff-badge-approved {
+  color: #155b34;
+  background: #e1f4e7;
+}
+
+.liff-badge-rejected {
+  color: #982a23;
+  background: #fde7e3;
+}
+
+.liff-leave-date {
+  margin-top: 16px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.liff-leave-duration {
+  font-size: 14px;
+  color: var(--liff-green);
+  margin-top: 3px;
+}
+
+.liff-reason {
+  color: #56665c;
+  font-size: 14px;
+  margin-top: 12px;
+  white-space: pre-wrap;
+}
+
+.liff-request-id {
+  font-size: 11px;
+  color: #647469;
+  margin-top: 12px;
+}
+
+.liff-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid #e6ece8;
+}
+
+.liff-card-actions > button {
+  flex: 1;
+}
+
+.liff-news-label {
+  color: var(--liff-green);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.liff-news-card h2 {
+  margin-top: 8px;
+}
+
+.liff-news-body {
+  white-space: pre-wrap;
+  color: #46584c;
+  margin-top: 16px;
+}
+
+.liff-news-card time {
+  display: block;
+  margin-top: 20px;
+  font-size: 12px;
+  color: #56665c;
+}
+
+.liff-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  border-top: 1px solid #dce6df;
+  box-shadow: 0 -4px 20px #163f280a;
+}
+
+.liff-bottom-nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 60px;
+  border-radius: 14px;
+  color: #56665c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.liff-bottom-nav svg {
+  width: 22px;
+  height: 22px;
+}
+
+.liff-bottom-nav button[aria-current="page"] {
+  background: #e7f3ec;
+  color: #096343;
+}
+
+@keyframes liff-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liff-spinner {
+    animation: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .liff-content {
+    padding: 16px 12px;
+  }
+  .liff-card {
+    padding: 16px;
+  }
+}

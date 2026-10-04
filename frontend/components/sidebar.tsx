@@ -15,7 +15,9 @@ const items = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  if (pathname === "/liff" || pathname.startsWith("/liff/")) return null;
+  if (pathname === "/liff" || pathname.startsWith("/liff/")) {
+    return null;
+  }
   return (
     <aside className="sticky top-0 z-50 flex bg-[#123c2a] px-4 py-2.5 text-[#d9e8df] shadow-lg md:h-dvh md:flex-col md:px-[18px] md:py-6 md:shadow-none">
       <div className="flex items-center gap-3 pr-4 md:px-2 md:pb-7 md:pr-2">
@@ -32,6 +34,7 @@ export function Sidebar() {
           <Link
             href={item.href}
             key={item.href}
+            aria-current={pathname === item.href ? "page" : undefined}
             className={`flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-[11px] px-3 text-xs font-semibold transition md:min-h-11 md:justify-start md:gap-3 md:text-sm ${
               pathname === item.href
                 ? "bg-white/10 text-white shadow-[inset_0_-2px_#70d99c] md:shadow-[inset_3px_0_#70d99c]"
@@ -45,7 +48,7 @@ export function Sidebar() {
       </nav>
       <div className="mt-auto hidden items-center gap-2 rounded-xl border border-white/10 p-3 text-xs text-[#a7bbae] md:flex">
         <span className="size-2 rounded-full bg-[#62da93] shadow-[0_0_0_4px_#62da9320]" />
-        ระบบพร้อมใช้งาน
+        พื้นที่จัดการสำหรับทีม HR
       </div>
     </aside>
   );

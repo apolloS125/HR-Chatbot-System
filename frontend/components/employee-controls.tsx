@@ -24,10 +24,21 @@ export function EmployeeForm({ canManageRoles = false }: { canManageRoles?: bool
       action={action}
       className="grid grid-cols-[1fr_1.6fr_1.8fr_1fr_auto] gap-2.5 p-5 max-xl:grid-cols-2 max-sm:grid-cols-1"
     >
-      <input className={field} name="employee_code" placeholder="รหัสพนักงาน" required />
-      <input className={field} name="name" placeholder="ชื่อ-นามสกุล" required />
-      <input className={field} name="work_email" type="email" placeholder="อีเมลบริษัท" required />
-      <select aria-label="บทบาท" className={field} name="role" defaultValue="employee">
+      <label className="grid gap-1.5 text-sm font-medium">
+        รหัสพนักงาน
+        <input className={field} name="employee_code" placeholder="เช่น 001" required />
+      </label>
+      <label className="grid gap-1.5 text-sm font-medium">
+        ชื่อ-นามสกุล
+        <input className={field} name="name" autoComplete="name" required />
+      </label>
+      <label className="grid gap-1.5 text-sm font-medium">
+        อีเมลบริษัท
+        <input className={field} name="work_email" type="email" autoComplete="email" required />
+      </label>
+      <label className="grid gap-1.5 text-sm font-medium">
+        บทบาท
+      <select className={field} name="role" defaultValue="employee">
         <option value="employee">พนักงาน</option>
         {canManageRoles && (
           <>
@@ -36,13 +47,14 @@ export function EmployeeForm({ canManageRoles = false }: { canManageRoles?: bool
           </>
         )}
       </select>
+      </label>
       <button
-        className="min-h-10 rounded-lg bg-[#087747] px-3 font-bold text-white transition hover:bg-[#06643b] disabled:cursor-wait disabled:opacity-60 max-xl:col-start-2 max-sm:col-auto"
+        className="min-h-11 self-end rounded-lg bg-[#087747] px-3 font-bold text-white transition hover:bg-[#06643b] disabled:cursor-wait disabled:opacity-60 max-xl:col-start-2 max-sm:col-auto"
         disabled={pending}
       >
         {pending ? "กำลังเพิ่ม…" : "เพิ่มพนักงาน"}
       </button>
-      {state.error && <small className="col-span-full text-xs text-[#b32222]">{state.error}</small>}
+      {state.error && <small role="alert" className="col-span-full text-sm text-[#b32222]">{state.error}</small>}
     </form>
   );
 }
@@ -74,7 +86,7 @@ export function EmployeeStatusButton({
       <button
         type="submit"
         disabled={pending}
-        className="whitespace-nowrap border-0 bg-transparent px-0 py-2 text-xs text-[#a32727] disabled:opacity-50"
+        className="min-h-11 whitespace-nowrap rounded-lg px-2 text-sm text-[#6d7a72] hover:bg-[#f2f5f3] disabled:opacity-50"
       >
         {active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
       </button>
@@ -106,7 +118,7 @@ export function EmployeeDeleteButton({
       <button
         type="submit"
         disabled={pending}
-        className="whitespace-nowrap border-0 bg-transparent px-0 py-2 text-xs text-[#a32727] disabled:opacity-50"
+        className="min-h-11 whitespace-nowrap rounded-lg px-2 text-sm text-[#a32727] hover:bg-red-50 disabled:opacity-50"
       >
         {pending ? "กำลังลบ…" : "ลบถาวร"}
       </button>
@@ -134,7 +146,7 @@ export function EditEmployeeForm({
     <div className="mt-3 border-t pt-3 text-sm">
       <button
         type="button"
-        className="text-[#087747]"
+        className="min-h-11 w-full rounded-lg border border-[#cad7ce] px-3 font-semibold text-[#087747] hover:bg-[#e7f5ed]"
         onClick={() => dialog.current?.showModal()}
       >
         แก้ไขข้อมูลและวันลา
@@ -152,7 +164,7 @@ export function EditEmployeeForm({
             type="button"
             onClick={() => dialog.current?.close()}
             aria-label="ปิดหน้าต่าง"
-            className="rounded-lg px-3 py-1 text-xl text-[#6d7a72]"
+            className="min-h-11 min-w-11 rounded-lg text-xl text-[#6d7a72]"
           >
             ×
           </button>
@@ -240,7 +252,7 @@ export function EditEmployeeForm({
           ))}
           <button
             disabled={pending}
-            className="rounded-lg bg-[#087747] p-2 text-white disabled:opacity-50"
+            className="min-h-11 rounded-lg bg-[#087747] p-2 font-semibold text-white disabled:opacity-50"
           >
             {pending ? "กำลังบันทึก…" : "บันทึก"}
           </button>
