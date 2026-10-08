@@ -49,6 +49,29 @@ class PolicyQuestion(BaseModel):
     question: str = Field(min_length=1, max_length=1500)
 
 
+class IntentResult(BaseModel):
+    type: Literal["choice"]
+    choice: Literal["balance", "announcements", "menu", "policy", "other"]
+    confidence: float = Field(ge=0, le=1)
+
+
+class PolicyViolationResult(BaseModel):
+    type: Literal["choice"]
+    choice: str
+    confidence: float = Field(ge=0, le=1, strict=True)
+
+
+class JailbreakResult(BaseModel):
+    type: Literal["noul"]
+    noul: float = Field(ge=0, le=1, strict=True)
+
+
+class SeverityResult(BaseModel):
+    type: Literal["score"]
+    score: float = Field(ge=0, le=3, strict=True)
+    confidence: float = Field(ge=0, le=1, strict=True)
+
+
 class FaqCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     keyword: str = Field(min_length=1, max_length=120)

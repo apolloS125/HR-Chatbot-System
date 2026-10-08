@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 
 from .admin import decide_leave
 from .core import valid_line_signature
+from .guardrails import check_guardrail
 from .intent import classify_intent
 from .knowledge import answer_policy
 from .leaves import business_days, read_balances, submit_leave
@@ -124,6 +125,9 @@ async def handle_message(
 
     known_commands = {"เมนู", "ช่วยเหลือ", "help", "วันลาคงเหลือ", "ประกาศ"}
     if normalized not in known_commands and not normalized.startswith("ขอลา"):
+        refusal = await check_guardrail(normalized)
+        if refusal:
+            return refusal
         intent = await classify_intent(normalized)
         intent_commands = {
             "balance": "วันลาคงเหลือ",

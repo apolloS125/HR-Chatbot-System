@@ -76,9 +76,13 @@ The chatbot uses LangChain prompt and model chains with OpenAI-compatible Chat C
 
 Common email addresses, phone numbers, national ID numbers, and employee IDs are masked before external model calls. This does not detect personal names or all PII; upload company policies, not personnel records.
 
-### Optional Jev routing
+### Jev guardrails and routing
 
 Set `TYPESAFE_API_KEY` to enable [Jev by TypeSafe](https://docs.typesafe.ai/introduction). Free-text questions are classified as balance, announcements, menu, policy, or other. Confident balance/menu/news requests use ordinary application code; exact commands bypass Jev. Low-confidence, invalid, or failed decisions fall back to policy search. Jev does not approve leave or change employee data. HTTP calls reuse `httpx`; no extra SDK or service is installed.
+
+Before intent routing, Jev screens free-text input using `policy_violation` (Choice), `jailbreak` (Noul), and `severity` (Score). The state contains `user_message` and six `assistant_policy` rules shared with the answer model. Policy answers also screen the question and retrieved reference text together before generation or direct-source fallback, including Dashboard previews. This checks for instructions injected into policy documents.
+
+Jailbreak probability >= 0.5 or severity >= 2 (Serious) blocks the request. Severity confidence < 0.8, missing credentials, timeout, HTTP errors, or malformed results stop the AI path with a temporary-unavailable reply. Exact HR commands still work. The supplied Choice has no “no violation” option, so it labels a policy and does not independently block safe messages. These thresholds need evaluation on real HR traffic; model screening cannot guarantee detection of every injection.
 
 LIFF must be used with a LINE account already linked to the employee. If it is not linked, the system will instruct the employee to contact HR.
 

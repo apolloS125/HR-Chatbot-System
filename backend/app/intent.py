@@ -1,10 +1,9 @@
 import os
-from typing import Literal
 
 import httpx
-from pydantic import BaseModel, Field
 
 from .privacy import mask_text
+from .schemas import IntentResult
 
 TYPESAFE_API_KEY = os.getenv("TYPESAFE_API_KEY", "")
 INTENTS = {
@@ -14,12 +13,6 @@ INTENTS = {
     "policy": "ถามเงื่อนไข สิทธิ์ สวัสดิการ หรือนโยบายบริษัท",
     "other": "เรื่องอื่นหรือข้อความที่ไม่ชัดเจน",
 }
-
-
-class IntentResult(BaseModel):
-    type: Literal["choice"]
-    choice: Literal["balance", "announcements", "menu", "policy", "other"]
-    confidence: float = Field(ge=0, le=1)
 
 
 async def classify_intent(text: str) -> str | None:
