@@ -15,11 +15,13 @@
     font-size: 16px;
   }
 
-  .dashboard-shell:not(:has(.liff-app)) :is(button, select, input:not([type="checkbox"]):not([type="radio"])) {
+  .dashboard-shell:not(:has(.liff-app))
+    :is(button, select, input:not([type="checkbox"]):not([type="radio"])) {
     min-height: 44px;
   }
 }
-.dashboard-shell:has(.liff-app) {
+.dashboard-shell:has(.liff-app),
+.dashboard-shell:has(.login-page) {
   display: block;
 }
 
@@ -60,14 +62,14 @@ body:has(.liff-app) > div {
   gap: 12px;
   font-size: 12px;
   font-weight: 750;
-  letter-spacing: .12em;
+  letter-spacing: 0.12em;
 }
 
 .liff-brand small {
   display: block;
   font-size: 11px;
   font-weight: 400;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
   color: #d2e6db;
 }
 
@@ -104,7 +106,8 @@ body:has(.liff-app) > div {
   padding: 20px 16px;
 }
 
-.liff-form, .liff-list {
+.liff-form,
+.liff-list {
   display: grid;
   gap: 16px;
 }
@@ -118,7 +121,8 @@ body:has(.liff-app) > div {
   box-shadow: 0 3px 12px #163f2810;
 }
 
-.liff-card h2, .liff-empty h2 {
+.liff-card h2,
+.liff-empty h2 {
   font-size: 18px;
   font-weight: 700;
 }
@@ -149,7 +153,9 @@ body:has(.liff-app) > div {
   margin-top: 18px;
 }
 
-.liff-field input, .liff-field select, .liff-field textarea {
+.liff-field input,
+.liff-field select,
+.liff-field textarea {
   display: block;
   width: 100%;
   min-width: 0;
@@ -216,7 +222,9 @@ body:has(.liff-app) > div {
   font-size: 13px;
 }
 
-.liff-primary, .liff-secondary, .liff-danger {
+.liff-primary,
+.liff-secondary,
+.liff-danger {
   min-height: 48px;
   border-radius: 12px;
   padding: 12px 16px;
@@ -248,7 +256,7 @@ body:has(.liff-app) > div {
 }
 
 .liff-app button:disabled {
-  opacity: .55;
+  opacity: 0.55;
   cursor: default;
 }
 

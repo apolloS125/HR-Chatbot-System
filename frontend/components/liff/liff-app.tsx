@@ -14,6 +14,7 @@ export function LiffApp() {
   const [tab, setTab] = useState<LiffTab>("leave");
   const [balances, setBalances] = useState<Balance[]>([]);
   const [leaves, setLeaves] = useState<Leave[]>([]);
+  const [hasMoreLeaves, setHasMoreLeaves] = useState(false);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [message, setMessage] = useState("กำลังเชื่อมต่อ LINE...");
   const [pending, setPending] = useState(false);
@@ -121,6 +122,7 @@ export function LiffApp() {
         const data = await api<Leave[]>("/leaves");
         if (version === loadVersion.current) {
           setLeaves(data);
+          setHasMoreLeaves(data.length === 50);
         }
       }
       if (next === "news") {
@@ -138,6 +140,28 @@ export function LiffApp() {
       if (version === loadVersion.current) {
         setLoading(false);
       }
+    }
+  }
+
+  async function loadMoreLeaves() {
+    if (busy.current || !hasMoreLeaves) {
+      return;
+    }
+    const version = loadVersion.current;
+    busy.current = true;
+    setPending(true);
+    try {
+      const data = await api<Leave[]>(`/leaves?limit=50&offset=${leaves.length}`);
+      if (version === loadVersion.current) {
+        setLeaves((previous) => [...previous, ...data]);
+        setHasMoreLeaves(data.length === 50);
+      }
+    } catch {
+      setMessageType("error");
+      setMessage("โหลดประวัติเพิ่มไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      busy.current = false;
+      setPending(false);
     }
   }
 
@@ -165,7 +189,11 @@ export function LiffApp() {
     const fingerprint = JSON.stringify([payload, attachmentFingerprint]);
 
     if (request.current.fingerprint !== fingerprint) {
-      request.current = { key: crypto.randomUUID(), fingerprint, attachment_id: "" };
+      request.current = {
+        key: crypto.randomUUID(),
+        fingerprint,
+        attachment_id: "",
+      };
     }
 
     try {
@@ -217,7 +245,9 @@ export function LiffApp() {
     setPending(true);
     try {
       await api(`/leaves/${id}/cancel`, { method: "POST" });
-      setLeaves(await api<Leave[]>("/leaves"));
+      const data = await api<Leave[]>("/leaves");
+      setLeaves(data);
+      setHasMoreLeaves(data.length === 50);
       setMessageType("success");
       setMessage("ยกเลิกคำขอแล้ว");
     } catch (error) {
@@ -260,9 +290,11 @@ export function LiffApp() {
       pending={pending}
       loading={loading}
       messageType={messageType}
-      retry={() => token ? void open(tab) : window.location.reload()}
+      retry={() => (token ? void open(tab) : window.location.reload())}
       balances={balances}
       leaves={leaves}
+      hasMoreLeaves={hasMoreLeaves}
+      loadMoreLeaves={loadMoreLeaves}
       announcements={announcements}
       open={open}
       submit={submit}

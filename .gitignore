@@ -1,4 +1,5 @@
-.env
+.env*
+!.env.example
 .DS_Store
 __pycache__/
 .pytest_cache/
@@ -6,3 +7,7 @@ __pycache__/
 node_modules/
 .next/
 *.pyc
+.codex/
+*.tsbuildinfo
+hr-chatbot-proposal-presentation.pptx-1.pdf
+mid-coop-proposal.pdf

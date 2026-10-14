@@ -1,8 +1,11 @@
-import { headers as requestHeaders } from "next/headers";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 const backend = process.env.BACKEND_URL ?? "http://localhost:8000";
 export async function adminHeaders() {
-  return { Authorization: (await requestHeaders()).get("authorization") ?? "" };
+  return {
+    Authorization: `Bearer ${(await cookies()).get("hr_session")?.value ?? ""}`,
+  };
 }
 
 export type Summary = {
@@ -52,10 +55,17 @@ export type Announcement = {
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${backend}${path}`, {
     ...init,
-    headers: { ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...await adminHeaders(), ...init?.headers },
+    headers: {
+      ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+      ...(await adminHeaders()),
+      ...init?.headers,
+    },
     cache: "no-store",
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      redirect("/login?expired=1");
+    }
     const data = await response.json().catch(() => ({}));
     const detail = Array.isArray(data.detail)
       ? data.detail.map((item: { msg: string }) => item.msg).join("; ")

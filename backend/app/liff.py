@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 
 from .core import (
     LIFF_CHANNEL_ID,
@@ -71,9 +71,16 @@ async def balances(employee=Depends(current_employee), database=Depends(db)):
 
 
 @router.get("/leaves")
-async def leaves(employee=Depends(current_employee), database=Depends(db)):
+async def leaves(
+    employee=Depends(current_employee),
+    database=Depends(db),
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
     query = database.leave_requests.find({"employee_code": employee["_id"]})
-    return [document_view(item) async for item in query.sort("created_at", -1)]
+    return [
+        document_view(item) async for item in query.sort("created_at", -1).skip(offset).limit(limit)
+    ]
 
 
 @router.get("/announcements")

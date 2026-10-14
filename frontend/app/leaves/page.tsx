@@ -15,10 +15,12 @@ const tableHeading =
 export default async function LeavesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; offset?: string }>;
 }) {
-  const leaves = await get<Leave[]>("/api/admin/leaves");
   const params = await searchParams;
+  const offset = Math.max(0, Math.floor(Number(params.offset) || 0));
+  const pageSize = 100;
+  const leaves = await get<Leave[]>(`/api/admin/leaves?limit=${pageSize}&offset=${offset}`);
   const selectedStatus = params.status ?? "all";
   const query = params.q?.trim() ?? "";
   const pending = leaves.filter((leave) => leave.status === "pending").length;
@@ -28,7 +30,9 @@ export default async function LeavesPage({
       const searchable = `${leave.name} ${leave.employee_code}`;
       return matchesStatus && searchable.toLocaleLowerCase().includes(query.toLocaleLowerCase());
     })
-    .sort((first, second) => Number(second.status === "pending") - Number(first.status === "pending"));
+    .sort(
+      (first, second) => Number(second.status === "pending") - Number(first.status === "pending"),
+    );
   const filters = [
     ["all", "ทั้งหมด"],
     ["pending", `รออนุมัติ (${pending})`],
@@ -50,7 +54,7 @@ export default async function LeavesPage({
           <p className="text-sm text-[#6d7a72]">ตรวจสอบและอนุมัติคำขอลาของพนักงาน</p>
         </div>
         <span className="shrink-0 rounded-full border border-[#e1e9e3] bg-white px-3 py-2 text-xs text-[#6d7a72] max-sm:mt-3 max-sm:inline-flex">
-          {pending} รออนุมัติ
+          {pending} รออนุมัติในหน้านี้
         </span>
       </header>
 
@@ -69,11 +73,26 @@ export default async function LeavesPage({
       <form role="search" className="mb-5 flex flex-wrap items-end gap-3">
         <input type="hidden" name="status" value={selectedStatus} />
         <label className="min-w-0 flex-1 text-sm font-semibold">
-          ค้นหาคำขอลา
-          <input type="search" name="q" defaultValue={query} placeholder="ชื่อหรือรหัสพนักงาน" className="mt-1.5 min-h-11 w-full rounded-xl border border-[#cad7ce] bg-white px-3 font-normal" />
+          ค้นหาคำขอลาภายในหน้านี้
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="ชื่อหรือรหัสพนักงาน"
+            className="mt-1.5 min-h-11 w-full rounded-xl border border-[#cad7ce] bg-white px-3 font-normal"
+          />
         </label>
-        <button className="min-h-11 rounded-xl bg-[#087747] px-5 text-sm font-bold text-white">ค้นหา</button>
-        {query && <Link href={`/leaves?status=${selectedStatus}`} className="flex min-h-11 items-center text-sm text-[#087747]">ล้างการค้นหา</Link>}
+        <button className="min-h-11 rounded-xl bg-[#087747] px-5 text-sm font-bold text-white">
+          ค้นหา
+        </button>
+        {query && (
+          <Link
+            href={`/leaves?status=${selectedStatus}`}
+            className="flex min-h-11 items-center text-sm text-[#087747]"
+          >
+            ล้างการค้นหา
+          </Link>
+        )}
       </form>
 
       <section className="overflow-hidden rounded-2xl border border-[#e1e9e3] bg-white shadow-[0_10px_30px_#264c3510]">
@@ -101,8 +120,7 @@ export default async function LeavesPage({
               {visibleLeaves.map((leave) => {
                 const leaveType = leaveLabels[leave.leave_type] ?? leave.leave_type;
                 const dateRange = `${formatDate(leave.start_date)} – ${formatDate(leave.end_date)}`;
-                const statusClass =
-                  statusClasses[leave.status] ?? "bg-gray-100 text-gray-600";
+                const statusClass = statusClasses[leave.status] ?? "bg-gray-100 text-gray-600";
                 const statusLabel = statusLabels[leave.status] ?? leave.status;
 
                 return (
@@ -144,7 +162,11 @@ export default async function LeavesPage({
                     </td>
                     <td className="px-4 py-3.5">
                       {leave.status === "pending" ? (
-                        <LeaveDecisionForm leave={leave} leaveType={leaveType} dateRange={dateRange} />
+                        <LeaveDecisionForm
+                          leave={leave}
+                          leaveType={leaveType}
+                          dateRange={dateRange}
+                        />
                       ) : (
                         <span className="text-xs text-[#8a958e]">ดำเนินการแล้ว</span>
                       )}
@@ -171,6 +193,22 @@ export default async function LeavesPage({
           </table>
         </div>
       </section>
+      <nav aria-label="หน้าประวัติคำขอลา" className="mt-5 flex justify-between gap-4 text-sm">
+        {offset > 0 && (
+          <Link
+            href={`/leaves?${new URLSearchParams({ status: selectedStatus, q: query, offset: String(Math.max(0, offset - pageSize)) })}`}
+          >
+            หน้าก่อนหน้า
+          </Link>
+        )}
+        {leaves.length === pageSize && (
+          <Link
+            href={`/leaves?${new URLSearchParams({ status: selectedStatus, q: query, offset: String(offset + pageSize) })}`}
+          >
+            หน้าถัดไป
+          </Link>
+        )}
+      </nav>
     </main>
   );
 }

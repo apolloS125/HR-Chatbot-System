@@ -138,17 +138,12 @@ def announcement_message(
 
 
 def announcement_carousel(rows: list[dict[str, object]]) -> dict[str, object]:
-    bubbles = [
-        announcement_bubble(row["title"], row["body"], row["published_at"])
-        for row in rows
-    ]
+    bubbles = [announcement_bubble(row["title"], row["body"], row["published_at"]) for row in rows]
     return {
         "type": "flex",
         "altText": "ประกาศล่าสุดจากบริษัท",
         "contents": (
-            bubbles[0]
-            if len(bubbles) == 1
-            else {"type": "carousel", "contents": bubbles}
+            bubbles[0] if len(bubbles) == 1 else {"type": "carousel", "contents": bubbles}
         ),
     }
 

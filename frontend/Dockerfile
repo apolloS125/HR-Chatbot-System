@@ -9,9 +9,13 @@ ENV NEXT_PUBLIC_LIFF_ID=$NEXT_PUBLIC_LIFF_ID
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
 RUN bun run build
 
-FROM oven/bun:1.3-slim
+FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app ./
+ENV HOSTNAME=0.0.0.0
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+USER node
 EXPOSE 3000
-CMD ["bun", "run", "start"]
+CMD ["node", "server.js"]

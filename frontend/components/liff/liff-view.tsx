@@ -33,10 +33,26 @@ const labels: Record<string, string> = {
   cancelled: "ยกเลิกแล้ว",
 };
 const tabs: { id: LiffTab; label: string; path: string }[] = [
-  { id: "leave", label: "ขอลา", path: "M8 3H5v18h14V3h-3M8 3v4h8V3H8Zm0 9h8m-8 4h5" },
-  { id: "balance", label: "วันลา", path: "M4 8h16M8 3v4m8-4v4M4 5h16v16H4V5Zm4 7h2m4 0h2m-8 4h2m4 0h2" },
-  { id: "history", label: "ประวัติ", path: "M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v5l3 2" },
-  { id: "news", label: "ประกาศ", path: "m4 9 14-5v16L4 15V9Zm0 0H2v6h2m3 1 2 5h3l-2-4m11-8v6" },
+  {
+    id: "leave",
+    label: "ขอลา",
+    path: "M8 3H5v18h14V3h-3M8 3v4h8V3H8Zm0 9h8m-8 4h5",
+  },
+  {
+    id: "balance",
+    label: "วันลา",
+    path: "M4 8h16M8 3v4m8-4v4M4 5h16v16H4V5Zm4 7h2m4 0h2m-8 4h2m4 0h2",
+  },
+  {
+    id: "history",
+    label: "ประวัติ",
+    path: "M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v5l3 2",
+  },
+  {
+    id: "news",
+    label: "ประกาศ",
+    path: "m4 9 14-5v16L4 15V9Zm0 0H2v6h2m3 1 2 5h3l-2-4m11-8v6",
+  },
 ];
 const dateFormat = new Intl.DateTimeFormat("th-TH", {
   day: "numeric",
@@ -62,6 +78,8 @@ type Props = {
   messageType: "info" | "success" | "error";
   balances: Balance[];
   leaves: Leave[];
+  hasMoreLeaves: boolean;
+  loadMoreLeaves: () => void;
   announcements: Announcement[];
   pending: boolean;
   loading: boolean;
@@ -73,15 +91,33 @@ type Props = {
 };
 
 export function LiffView({
-  token, name, tab, message, messageType, balances, leaves, announcements,
-  open, submit, pending, loading, retry, cancel, download,
+  token,
+  name,
+  tab,
+  message,
+  messageType,
+  balances,
+  leaves,
+  hasMoreLeaves,
+  loadMoreLeaves,
+  announcements,
+  open,
+  submit,
+  pending,
+  loading,
+  retry,
+  cancel,
+  download,
 }: Props) {
   const [startDate, setStartDate] = useState("");
   const [filename, setFilename] = useState("");
   const notice = useRef<HTMLDivElement>(null);
-  const year = Number(new Intl.DateTimeFormat("en", {
-    timeZone: "Asia/Bangkok", year: "numeric",
-  }).format(new Date()));
+  const year = Number(
+    new Intl.DateTimeFormat("en", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+    }).format(new Date()),
+  );
 
   useEffect(() => {
     setStartDate("");
@@ -98,8 +134,12 @@ export function LiffView({
     <main className="liff-app">
       <header className="liff-header">
         <div className="liff-brand">
-          <span className="liff-brand-mark" aria-hidden="true">P</span>
-          <span>PEOPLE HUB<small>HR Self Service</small></span>
+          <span className="liff-brand-mark" aria-hidden="true">
+            P
+          </span>
+          <span>
+            PEOPLE HUB<small>HR Self Service</small>
+          </span>
         </div>
         <p className="liff-greeting">{name ? "สวัสดี คุณ" + name : "สวัสดี ยินดีต้อนรับ"}</p>
         <h1>{titles[tab][0]}</h1>
@@ -108,8 +148,11 @@ export function LiffView({
 
       <div className="liff-content">
         {message && (
-          <div ref={notice} className={"liff-notice liff-notice-" + messageType}
-            role={messageType === "error" ? "alert" : "status"}>
+          <div
+            ref={notice}
+            className={"liff-notice liff-notice-" + messageType}
+            role={messageType === "error" ? "alert" : "status"}
+          >
             <p>{message}</p>
             {messageType === "error" && (!token || tab !== "leave") && (
               <button type="button" className="liff-secondary" onClick={retry} disabled={loading}>
@@ -128,55 +171,96 @@ export function LiffView({
           <section className="liff-empty" aria-busy={messageType !== "error"}>
             {messageType !== "error" && <span className="liff-spinner" aria-hidden="true" />}
             <h2>{messageType === "error" ? "ยังเข้าใช้งานไม่ได้" : "กำลังยืนยันบัญชีของคุณ"}</h2>
-            <p>{messageType === "error" ? "ลองใหม่ หรือติดต่อ HR เพื่อช่วยตรวจสอบบัญชี" : "รอสักครู่ เรากำลังเชื่อมต่อกับ LINE"}</p>
+            <p>
+              {messageType === "error"
+                ? "ลองใหม่ หรือติดต่อ HR เพื่อช่วยตรวจสอบบัญชี"
+                : "รอสักครู่ เรากำลังเชื่อมต่อกับ LINE"}
+            </p>
           </section>
         ) : (
           <>
             {tab === "leave" && (
-              <form className="liff-form" onSubmit={submit}
+              <form
+                className="liff-form"
+                onSubmit={submit}
                 onReset={() => {
                   setStartDate("");
                   setFilename("");
-                }}>
+                }}
+              >
                 <fieldset className="liff-card" disabled={pending}>
                   <legend className="sr-only">ข้อมูลคำขอลา</legend>
-                  <div className="liff-section-heading"><span>01</span><h2>รายละเอียดการลา</h2></div>
-                  <label className="liff-field">ประเภทการลา
+                  <div className="liff-section-heading">
+                    <span>01</span>
+                    <h2>รายละเอียดการลา</h2>
+                  </div>
+                  <label className="liff-field">
+                    ประเภทการลา
                     <select name="leave_type" defaultValue="vacation">
                       <option value="vacation">พักร้อน</option>
                       <option value="sick">ลาป่วย</option>
                       <option value="personal">ลากิจ</option>
                     </select>
                   </label>
-                  <label className="liff-field">วันเริ่มลา
-                    <input required name="start_date" type="date" min={year + "-01-01"}
-                      max={year + "-12-31"} onChange={(event) => setStartDate(event.target.value)} />
+                  <label className="liff-field">
+                    วันเริ่มลา
+                    <input
+                      required
+                      name="start_date"
+                      type="date"
+                      min={year + "-01-01"}
+                      max={year + "-12-31"}
+                      onChange={(event) => setStartDate(event.target.value)}
+                    />
                   </label>
-                  <label className="liff-field">วันสิ้นสุด
-                    <input required name="end_date" type="date" min={startDate || year + "-01-01"}
-                      max={year + "-12-31"} />
+                  <label className="liff-field">
+                    วันสิ้นสุด
+                    <input
+                      required
+                      name="end_date"
+                      type="date"
+                      min={startDate || year + "-01-01"}
+                      max={year + "-12-31"}
+                    />
                   </label>
-                  <label className="liff-field">ระยะเวลา
+                  <label className="liff-field">
+                    ระยะเวลา
                     <select name="half_day" aria-describedby="half-day-hint">
                       <option value="">เต็มวัน</option>
                       <option value="morning">ครึ่งวันเช้า</option>
                       <option value="afternoon">ครึ่งวันบ่าย</option>
                     </select>
-                    <small id="half-day-hint">ลาครึ่งวัน ให้เลือกวันเริ่มและวันสิ้นสุดเป็นวันเดียวกัน</small>
+                    <small id="half-day-hint">
+                      ลาครึ่งวัน ให้เลือกวันเริ่มและวันสิ้นสุดเป็นวันเดียวกัน
+                    </small>
                   </label>
                 </fieldset>
 
                 <fieldset className="liff-card" disabled={pending}>
                   <legend className="sr-only">เหตุผลและเอกสารแนบ</legend>
-                  <div className="liff-section-heading"><span>02</span><h2>เหตุผลและเอกสาร</h2></div>
-                  <label className="liff-field">เหตุผลการลา
-                    <textarea required name="reason" rows={3} maxLength={1500}
-                      placeholder="ระบุเหตุผลเพื่อให้ HR พิจารณา" />
+                  <div className="liff-section-heading">
+                    <span>02</span>
+                    <h2>เหตุผลและเอกสาร</h2>
+                  </div>
+                  <label className="liff-field">
+                    เหตุผลการลา
+                    <textarea
+                      required
+                      name="reason"
+                      rows={3}
+                      maxLength={1500}
+                      placeholder="ระบุเหตุผลเพื่อให้ HR พิจารณา"
+                    />
                   </label>
-                  <label className="liff-field">เอกสารแนบ <span className="liff-optional">ไม่บังคับ</span>
-                    <input name="attachment" type="file" accept="application/pdf,image/jpeg,image/png"
+                  <label className="liff-field">
+                    เอกสารแนบ <span className="liff-optional">ไม่บังคับ</span>
+                    <input
+                      name="attachment"
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png"
                       aria-describedby="attachment-hint"
-                      onChange={(event) => setFilename(event.target.files?.[0]?.name ?? "")} />
+                      onChange={(event) => setFilename(event.target.files?.[0]?.name ?? "")}
+                    />
                     <small id="attachment-hint">PDF, JPG หรือ PNG ขนาดไม่เกิน 10 MB</small>
                     {filename && <small className="liff-file-name">เลือกแล้ว: {filename}</small>}
                   </label>
@@ -200,22 +284,38 @@ export function LiffView({
                     <p className="liff-year">สิทธิ์การลา ปี {year + 543}</p>
                     {balances.map((item) => (
                       <article key={item.leave_type} className="liff-card liff-balance-card">
-                        <div><h2>{labels[item.leave_type] ?? item.leave_type}</h2><p>วันลาคงเหลือ</p></div>
-                        <p className="liff-balance-number">{item.remaining_days}<small>วัน</small></p>
+                        <div>
+                          <h2>{labels[item.leave_type] ?? item.leave_type}</h2>
+                          <p>วันลาคงเหลือ</p>
+                        </div>
+                        <p className="liff-balance-number">
+                          {item.remaining_days}
+                          <small>วัน</small>
+                        </p>
                       </article>
                     ))}
                     {!balances.length && messageType !== "error" && (
-                      <Empty title="ยังไม่มีข้อมูลวันลา" detail="ติดต่อ HR เพื่อตรวจสอบสิทธิ์การลาของคุณ" />
+                      <Empty
+                        title="ยังไม่มีข้อมูลวันลา"
+                        detail="ติดต่อ HR เพื่อตรวจสอบสิทธิ์การลาของคุณ"
+                      />
                     )}
-                    {!!balances.length && <p className="liff-form-note">ยอดนี้ยังไม่หักคำขอที่รออนุมัติ</p>}
-                    <button type="button" className="liff-primary" onClick={() => open("leave")}>ยื่นคำขอลา</button>
+                    {!!balances.length && (
+                      <p className="liff-form-note">ยอดนี้ยังไม่หักคำขอที่รออนุมัติ</p>
+                    )}
+                    <button type="button" className="liff-primary" onClick={() => open("leave")}>
+                      ยื่นคำขอลา
+                    </button>
                   </section>
                 )}
 
                 {tab === "history" && (
                   <section className="liff-list" aria-label="ประวัติคำขอลา">
                     {!leaves.length && messageType !== "error" && (
-                      <Empty title="ยังไม่มีคำขอลา" detail="เมื่อส่งคำขอแล้ว คุณติดตามสถานะได้ที่นี่" />
+                      <Empty
+                        title="ยังไม่มีคำขอลา"
+                        detail="เมื่อส่งคำขอแล้ว คุณติดตามสถานะได้ที่นี่"
+                      />
                     )}
                     {leaves.map((item) => (
                       <article key={item.id} className="liff-card">
@@ -231,19 +331,29 @@ export function LiffView({
                         </p>
                         <p className="liff-leave-duration">
                           {item.days} วัน
-                          {item.half_day && " · " + (item.half_day === "morning" ? "ครึ่งวันเช้า" : "ครึ่งวันบ่าย")}
+                          {item.half_day &&
+                            " · " + (item.half_day === "morning" ? "ครึ่งวันเช้า" : "ครึ่งวันบ่าย")}
                         </p>
                         <p className="liff-reason">{item.reason}</p>
                         <p className="liff-request-id">รหัสคำขอ {item.id}</p>
                         {(item.attachment_id || item.status === "pending") && (
                           <div className="liff-card-actions">
                             {item.attachment_id && (
-                              <button type="button" className="liff-secondary"
-                                onClick={() => download(item.attachment_id!)}>ดูเอกสารแนบ</button>
+                              <button
+                                type="button"
+                                className="liff-secondary"
+                                onClick={() => download(item.attachment_id!)}
+                              >
+                                ดูเอกสารแนบ
+                              </button>
                             )}
                             {item.status === "pending" && (
-                              <button type="button" className="liff-danger"
-                                disabled={pending} onClick={() => cancel(item.id)}>
+                              <button
+                                type="button"
+                                className="liff-danger"
+                                disabled={pending}
+                                onClick={() => cancel(item.id)}
+                              >
                                 {pending ? "กำลังดำเนินการ…" : "ยกเลิกคำขอ"}
                               </button>
                             )}
@@ -277,13 +387,31 @@ export function LiffView({
         )}
       </div>
 
+      {tab === "history" && hasMoreLeaves && !loading && (
+        <div className="liff-content">
+          <button className="liff-secondary" disabled={pending} onClick={loadMoreLeaves}>
+            {pending ? "กำลังโหลด…" : "ดูประวัติเพิ่ม"}
+          </button>
+        </div>
+      )}
       <nav className="liff-bottom-nav" aria-label="เมนูพนักงาน">
         {tabs.map((item) => (
-          <button type="button" key={item.id} disabled={!token || pending}
+          <button
+            type="button"
+            key={item.id}
+            disabled={!token || pending}
             aria-current={tab === item.id ? "page" : undefined}
-            onClick={() => open(item.id)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
-              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            onClick={() => open(item.id)}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d={item.path} />
             </svg>
             <span>{item.label}</span>
@@ -296,6 +424,9 @@ export function LiffView({
 
 function Empty({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="liff-empty"><h2>{title}</h2><p>{detail}</p></div>
+    <div className="liff-empty">
+      <h2>{title}</h2>
+      <p>{detail}</p>
+    </div>
   );
 }

@@ -1,21 +1,26 @@
+import asyncio
 import json
+import logging
+import os
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 
 from .admin import decide_leave
 from .core import valid_line_signature
 from .guardrails import check_guardrail
 from .intent import classify_intent
 from .knowledge import answer_policy
-from .leaves import business_days, read_balances, submit_leave
+from .leaves import read_balances, submit_leave
 from .line_client import announcement_carousel, reply_line
 from .schemas import LeaveDecision
 
 router = APIRouter()
 LEAVE_TYPES = {"พักร้อน": "vacation", "ป่วย": "sick", "กิจ": "personal"}
 LEAVE_LABELS = {value: key for key, value in LEAVE_TYPES.items()}
+LIFF_APP_ID = os.getenv("NEXT_PUBLIC_LIFF_ID", "")
+_EVENT_LIMIT = asyncio.Semaphore(8)
 
 
 def parse_leave_command(text: str):
@@ -36,35 +41,77 @@ def parse_leave_command(text: str):
 
 
 @router.post("/line/webhook")
-async def line_webhook(request: Request, x_line_signature: Annotated[str | None, Header()] = None):
+async def line_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_line_signature: Annotated[str | None, Header()] = None,
+):
     body = await request.body()
 
     if not valid_line_signature(body, x_line_signature):
         raise HTTPException(status_code=401, detail="invalid LINE signature")
 
-    for event in json.loads(body).get("events", []):
-        is_text_message = (
-            event.get("type") == "message"
-            and event.get("message", {}).get("type") == "text"
-        )
-        if not is_text_message:
-            continue
-
-        user_id = event.get("source", {}).get("userId")
-        reply_token = event.get("replyToken")
-        if not user_id or not reply_token:
-            continue
-
-        response = await handle_message(
-            request.app.state.mongo,
-            user_id,
-            event["message"]["text"],
-            event.get("webhookEventId") or reply_token,
-            request.app.state.redis,
-        )
-        await reply_line(reply_token, response)
-
+    try:
+        events = json.loads(body).get("events", [])
+        if not isinstance(events, list) or any(not isinstance(event, dict) for event in events):
+            raise ValueError("invalid events")
+    except (ValueError, AttributeError) as error:
+        raise HTTPException(status_code=400, detail="invalid webhook payload") from error
+    # shortcut: in-process tasks; use a durable inbox worker before requiring crash recovery.
+    background_tasks.add_task(
+        process_events, request.app.state.mongo, request.app.state.redis, events
+    )
     return {"ok": True}
+
+
+async def process_events(database, redis, events):
+    await asyncio.gather(*(process_event(database, redis, event) for event in events))
+
+
+async def process_event(database, redis, event):
+    async with _EVENT_LIMIT:
+        event_id = event.get("webhookEventId") or event.get("replyToken", "")
+        key = f"line-event:{event_id}"
+        claimed = False
+        try:
+            if not event_id:
+                return
+            claimed = await redis.set(key, "processing", nx=True, ex=120)
+            if not claimed:
+                return
+            await reply_to_event(database, redis, event)
+            await redis.set(key, "done", ex=86400)
+        except Exception as error:
+            logging.getLogger(__name__).error(
+                "LINE event processing failed: id=%s error=%s", event_id, type(error).__name__
+            )
+            if claimed:
+                try:
+                    await redis.delete(key)
+                except Exception:
+                    logging.getLogger(__name__).error("Could not release LINE event claim")
+
+
+async def reply_to_event(database, redis, event):
+    is_text_message = (
+        event.get("type") == "message" and event.get("message", {}).get("type") == "text"
+    )
+    if not is_text_message:
+        return
+
+    user_id = event.get("source", {}).get("userId")
+    reply_token = event.get("replyToken")
+    if not user_id or not reply_token:
+        return
+
+    response = await handle_message(
+        database,
+        user_id,
+        event["message"]["text"],
+        event.get("webhookEventId") or reply_token,
+        redis,
+    )
+    await reply_line(reply_token, response)
 
 
 async def handle_message(
@@ -120,6 +167,8 @@ async def handle_message(
             for item in rows
         )
 
+    if normalized == "ขอลา" and LIFF_APP_ID:
+        return menu()
     if normalized.startswith("ขอลา") and not parse_leave_command(normalized):
         return "รูปแบบคำขอลาไม่ถูกต้อง\nขอลา <พักร้อน|ป่วย|กิจ> <YYYY-MM-DD> <YYYY-MM-DD> <เหตุผล>"
 
@@ -142,17 +191,12 @@ async def handle_message(
     if normalized == "วันลาคงเหลือ":
         balances = await read_balances(database, employee["_id"])
         balance_lines = [
-            f"{LEAVE_LABELS[leave_type]}: {days} วัน"
-            for leave_type, days in balances.items()
+            f"{LEAVE_LABELS[leave_type]}: {days} วัน" for leave_type, days in balances.items()
         ]
         return "วันลาคงเหลือ\n" + "\n".join(balance_lines)
 
     if normalized == "ประกาศ":
-        announcements = (
-            database.announcements.find({})
-            .sort("published_at", -1)
-            .limit(3)
-        )
+        announcements = database.announcements.find({}).sort("published_at", -1).limit(3)
         rows = [row async for row in announcements]
         return announcement_carousel(rows) if rows else "ยังไม่มีประกาศ"
 
@@ -171,8 +215,34 @@ async def handle_message(
         except ValueError:
             return "ช่วงวันที่ลาไม่ถูกต้อง"
 
-    return await answer_policy(database, normalized) or "ไม่พบคำตอบในฐานข้อมูล HR\n\n" + menu()
+    answer = await answer_policy(database, normalized, redis)
+    return answer or menu()
 
 
-def menu() -> str:
-    return "เมนู HR\n• วันลาคงเหลือ\n• ประกาศ\n• ขอลา <พักร้อน|ป่วย|กิจ> <วันเริ่ม> <วันสิ้นสุด> <เหตุผล>"
+def menu() -> str | dict:
+    if not LIFF_APP_ID:
+        return "เมนู HR\n• วันลาคงเหลือ\n• ประกาศ\n• ขอลา <พักร้อน|ป่วย|กิจ> <วันเริ่ม> <วันสิ้นสุด> <เหตุผล>"
+    return {
+        "type": "text",
+        "text": "เมนู HR: เลือกบริการด้านล่าง หรือกดขอลาเพื่อกรอกแบบฟอร์ม",
+        "quickReply": {
+            "items": [
+                {
+                    "type": "action",
+                    "action": {"type": "message", "label": "วันลาคงเหลือ", "text": "วันลาคงเหลือ"},
+                },
+                {
+                    "type": "action",
+                    "action": {"type": "message", "label": "ประกาศ", "text": "ประกาศ"},
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "uri",
+                        "label": "ขอลา",
+                        "uri": f"https://liff.line.me/{LIFF_APP_ID}",
+                    },
+                },
+            ],
+        },
+    }

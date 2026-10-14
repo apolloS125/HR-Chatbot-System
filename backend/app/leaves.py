@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
@@ -13,10 +14,7 @@ def business_days(start: date, end: date, holidays=()) -> int:
     if end < start or (end - start).days > 366:
         raise ValueError("invalid leave date range")
 
-    days = (
-        start + timedelta(days=offset)
-        for offset in range((end - start).days + 1)
-    )
+    days = (start + timedelta(days=offset) for offset in range((end - start).days + 1))
     return sum(day.weekday() < 5 and day.isoformat() not in holidays for day in days)
 
 
@@ -114,12 +112,9 @@ async def submit_leave(
             raise HTTPException(status_code=404, detail="employee not found")
 
         balances = await current_balances(database, employee, session)
-        holiday_query = {
-            "_id": {"$gte": start.isoformat(), "$lte": end.isoformat()}
-        }
+        holiday_query = {"_id": {"$gte": start.isoformat(), "$lte": end.isoformat()}}
         holidays = {
-            item["_id"]
-            async for item in database.holidays.find(holiday_query, session=session)
+            item["_id"] async for item in database.holidays.find(holiday_query, session=session)
         }
         days = business_days(start, end, holidays) * (0.5 if half_day else 1)
         if not days:
@@ -163,7 +158,7 @@ async def submit_leave(
         ):
             raise HTTPException(status_code=422, detail="ไม่พบเอกสารแนบของพนักงาน")
 
-        request_id = f"LR-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+        request_id = f"LR-{uuid4().hex}"
         document = {
             "_id": request_id,
             "employee_code": employee_code,

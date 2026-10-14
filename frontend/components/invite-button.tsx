@@ -18,7 +18,11 @@ export function InviteButton({ employeeId }: { employeeId: string }) {
       setCopyStatus("คัดลอกลิงก์แล้ว");
     } catch {
       input.current?.select();
-      setCopyStatus(document.execCommand("copy") ? "คัดลอกลิงก์แล้ว" : "คัดลอกไม่ได้ แตะค้างที่ลิงก์เพื่อคัดลอก");
+      setCopyStatus(
+        document.execCommand("copy")
+          ? "คัดลอกลิงก์แล้ว"
+          : "คัดลอกไม่ได้ แตะค้างที่ลิงก์เพื่อคัดลอก",
+      );
     }
   }
 
@@ -66,7 +70,9 @@ export function InviteButton({ employeeId }: { employeeId: string }) {
         </>
       )}
       {state.error && (
-        <small role="alert" className="basis-full text-sm text-[#b32222]">{state.error}</small>
+        <small role="alert" className="basis-full text-sm text-[#b32222]">
+          {state.error}
+        </small>
       )}
     </div>
   );

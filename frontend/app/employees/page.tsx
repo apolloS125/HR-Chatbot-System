@@ -2,7 +2,6 @@ import Link from "next/link";
 
 import {
   EditEmployeeForm,
-  EmployeeDeleteButton,
   EmployeeForm,
   EmployeeStatusButton,
 } from "../../components/employee-controls";
@@ -39,15 +38,11 @@ export default async function EmployeesPage({
     <main className="mx-auto w-[calc(100%-3rem)] max-w-[1240px] py-10 max-md:w-[calc(100%-1.75rem)] max-md:py-7">
       <header className="mb-7 flex items-end justify-between gap-6 max-sm:block">
         <div>
-          <span className="text-[11px] font-extrabold tracking-[.17em] text-[#087747]">
-            PEOPLE
-          </span>
+          <span className="text-[11px] font-extrabold tracking-[.17em] text-[#087747]">PEOPLE</span>
           <h1 className="mt-1 mb-1 text-[clamp(1.75rem,3vw,2.45rem)] leading-tight font-bold tracking-[-.04em]">
             พนักงาน
           </h1>
-          <p className="text-sm text-[#6d7a72]">
-            เพิ่มพนักงานและจัดการการเชื่อมบัญชี LINE
-          </p>
+          <p className="text-sm text-[#6d7a72]">เพิ่มพนักงานและจัดการการเชื่อมบัญชี LINE</p>
         </div>
         <div className="flex shrink-0 items-center gap-3 max-sm:mt-3">
           <span className="rounded-full border border-[#e1e9e3] bg-white px-3 py-2 text-xs text-[#6d7a72]">
@@ -88,9 +83,14 @@ export default async function EmployeesPage({
             placeholder="ชื่อ รหัสพนักงาน หรืออีเมล"
           />
         </label>
-        <button className="min-h-11 rounded-xl bg-[#087747] px-5 text-sm font-bold text-white">ค้นหา</button>
+        <button className="min-h-11 rounded-xl bg-[#087747] px-5 text-sm font-bold text-white">
+          ค้นหา
+        </button>
         {query && (
-          <Link href={showInactive ? "/employees?show_inactive=1" : "/employees"} className="flex min-h-11 items-center text-sm text-[#087747]">
+          <Link
+            href={showInactive ? "/employees?show_inactive=1" : "/employees"}
+            className="flex min-h-11 items-center text-sm text-[#087747]"
+          >
             ล้างการค้นหา
           </Link>
         )}
@@ -117,9 +117,7 @@ export default async function EmployeesPage({
               {employee.work_email}
             </p>
             <div className="mb-4">
-              {!employee.active && (
-                <span className="mr-2 text-xs text-red-700">ปิดใช้งาน</span>
-              )}
+              {!employee.active && <span className="mr-2 text-xs text-red-700">ปิดใช้งาน</span>}
               {employee.line_linked ? (
                 <span className="inline-flex rounded-full bg-[#e4f5eb] px-2.5 py-1 text-[11px] font-bold text-[#087747]">
                   ✓ เชื่อม LINE แล้ว
@@ -143,7 +141,6 @@ export default async function EmployeesPage({
                     name={employee.name}
                     active={employee.active}
                   />
-                  <EmployeeDeleteButton employeeId={employee.id} name={employee.name} />
                 </div>
               )}
             </div>
@@ -154,7 +151,11 @@ export default async function EmployeesPage({
         ))}
         {!visibleEmployees.length && (
           <div className="col-span-full rounded-2xl border border-[#e1e9e3] bg-white p-10 text-center text-sm text-[#6d7a72]">
-            {query ? "ไม่พบพนักงาน ลองค้นหาด้วยชื่อ รหัส หรืออีเมลอื่น" : showInactive ? "ยังไม่มีพนักงานในระบบ เริ่มจากเพิ่มพนักงานด้านบน" : "ไม่มีพนักงานที่เปิดใช้งาน"}
+            {query
+              ? "ไม่พบพนักงาน ลองค้นหาด้วยชื่อ รหัส หรืออีเมลอื่น"
+              : showInactive
+                ? "ยังไม่มีพนักงานในระบบ เริ่มจากเพิ่มพนักงานด้านบน"
+                : "ไม่มีพนักงานที่เปิดใช้งาน"}
           </div>
         )}
       </section>

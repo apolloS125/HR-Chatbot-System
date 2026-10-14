@@ -11,11 +11,16 @@ from .privacy import mask_text
 VECTOR_SIZE = 128
 OPENAI_API_KEY = os.getenv("OPENAI_EMBEDDING_API_KEY", "")
 POLICY_CLASS = "HrPolicySemantic" if OPENAI_API_KEY else "HrPolicy"
+WEAVIATE_API_KEY = os.getenv("WEAVIATE_API_KEY", "")
+
+
+def weaviate_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {WEAVIATE_API_KEY}"} if WEAVIATE_API_KEY else {}
 
 
 def embed_text(text: str) -> list[float]:
     normalized = " ".join(text.lower().split())
-    features = [normalized[index:index + 3] for index in range(max(1, len(normalized) - 2))]
+    features = [normalized[index : index + 3] for index in range(max(1, len(normalized) - 2))]
     vector = [0.0] * VECTOR_SIZE
     for feature in features:
         digest = hashlib.blake2b(feature.encode(), digest_size=4).digest()
@@ -25,10 +30,11 @@ def embed_text(text: str) -> list[float]:
 
 
 async def ensure_policy_index(client: httpx.AsyncClient, policies: list[dict]) -> None:
-    schema = await client.get(f"/v1/schema/{POLICY_CLASS}")
+    schema = await client.get(f"/v1/schema/{POLICY_CLASS}", headers=weaviate_headers())
     if schema.status_code == 404:
         created = await client.post(
             "/v1/schema",
+            headers=weaviate_headers(),
             json={
                 "class": POLICY_CLASS,
                 "vectorizer": "none",
@@ -40,7 +46,7 @@ async def ensure_policy_index(client: httpx.AsyncClient, policies: list[dict]) -
         schema.raise_for_status()
 
     for offset in range(0, len(policies), 32):
-        batch = policies[offset:offset + 32]
+        batch = policies[offset : offset + 32]
         texts = [
             f"{policy.get('keyword', '')} {policy.get('question', '')} {policy['answer']}"
             for policy in batch
@@ -63,6 +69,7 @@ async def ensure_policy_index(client: httpx.AsyncClient, policies: list[dict]) -
 
         response = await client.post(
             "/v1/batch/objects",
+            headers=weaviate_headers(),
             json={"objects": objects},
         )
         response.raise_for_status()
@@ -106,6 +113,7 @@ async def search_policy(client: httpx.AsyncClient, question: str) -> list[str]:
     )
     response = await client.post(
         "/v1/graphql",
+        headers=weaviate_headers(),
         json={"query": query},
     )
     response.raise_for_status()

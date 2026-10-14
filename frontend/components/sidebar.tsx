@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { logout } from "../app/login/actions";
 
 const items = [
   { href: "/", icon: "⌂", label: "ภาพรวม" },
@@ -15,7 +16,7 @@ const items = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  if (pathname === "/liff" || pathname.startsWith("/liff/")) {
+  if (pathname === "/login" || pathname === "/liff" || pathname.startsWith("/liff/")) {
     return null;
   }
   return (
@@ -29,7 +30,10 @@ export function Sidebar() {
           <small className="mt-0.5 block text-[11px] text-[#9bb5a5]">HR Chatbot</small>
         </div>
       </div>
-      <nav aria-label="เมนูหลัก" className="flex min-w-0 flex-1 gap-1 overflow-x-auto md:grid md:flex-none md:gap-1.5">
+      <nav
+        aria-label="เมนูหลัก"
+        className="flex min-w-0 flex-1 gap-1 overflow-x-auto md:grid md:flex-none md:gap-1.5"
+      >
         {items.map((item) => (
           <Link
             href={item.href}
@@ -41,11 +45,16 @@ export function Sidebar() {
                 : "text-[#b8cbbf] hover:bg-white/5 hover:text-white"
             }`}
           >
-            <span aria-hidden="true" className="w-4 text-center text-base md:w-5">{item.icon}</span>
+            <span aria-hidden="true" className="w-4 text-center text-base md:w-5">
+              {item.icon}
+            </span>
             {item.label}
           </Link>
         ))}
       </nav>
+      <form action={logout} className="md:mt-4">
+        <button className="min-h-11 rounded-lg px-3 text-sm hover:bg-white/10">ออกจากระบบ</button>
+      </form>
       <div className="mt-auto hidden items-center gap-2 rounded-xl border border-white/10 p-3 text-xs text-[#a7bbae] md:flex">
         <span className="size-2 rounded-full bg-[#62da93] shadow-[0_0_0_4px_#62da9320]" />
         พื้นที่จัดการสำหรับทีม HR

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 
 import { api, type Announcement } from "../lib/api";
 
@@ -8,10 +9,7 @@ export type EmployeeState = { error: string };
 export type InviteState = { link: string; error: string };
 export type AnnouncementState = { message: string; error: string };
 
-export async function createEmployee(
-  _: EmployeeState,
-  formData: FormData,
-): Promise<EmployeeState> {
+export async function createEmployee(_: EmployeeState, formData: FormData): Promise<EmployeeState> {
   try {
     await api("/api/admin/employees", {
       method: "POST",
@@ -26,6 +24,7 @@ export async function createEmployee(
     revalidatePath("/");
     return { error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     const message = error instanceof Error ? error.message : "เพิ่มพนักงานไม่สำเร็จ";
     const duplicateMessage = "รหัสพนักงานหรืออีเมลนี้มีอยู่แล้ว";
 
@@ -35,10 +34,7 @@ export async function createEmployee(
   }
 }
 
-export async function deleteEmployee(
-  _: EmployeeState,
-  formData: FormData,
-): Promise<EmployeeState> {
+export async function deleteEmployee(_: EmployeeState, formData: FormData): Promise<EmployeeState> {
   try {
     const employeeId = formData.get("employee_id");
     const active = formData.get("active") === "true";
@@ -51,33 +47,14 @@ export async function deleteEmployee(
     revalidatePath("/");
     return { error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       error: error instanceof Error ? error.message : "เปลี่ยนสถานะไม่สำเร็จ",
     };
   }
 }
 
-export async function removeEmployee(
-  _: EmployeeState,
-  formData: FormData,
-): Promise<EmployeeState> {
-  try {
-    const employeeId = formData.get("employee_id");
-    await api(`/api/admin/employees/${employeeId}`, { method: "DELETE" });
-    revalidatePath("/employees");
-    revalidatePath("/");
-    return { error: "" };
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : "ลบพนักงานไม่สำเร็จ",
-    };
-  }
-}
-
-export async function issueLink(
-  _: InviteState,
-  formData: FormData,
-): Promise<InviteState> {
+export async function issueLink(_: InviteState, formData: FormData): Promise<InviteState> {
   try {
     const employeeId = formData.get("employee_id");
     const data = await api<{ link: string }>(`/api/admin/employees/${employeeId}/link`, {
@@ -85,6 +62,7 @@ export async function issueLink(
     });
     return { link: data.link, error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       link: "",
       error: error instanceof Error ? error.message : "ออกลิงก์ไม่สำเร็จ",
@@ -92,10 +70,7 @@ export async function issueLink(
   }
 }
 
-export async function decideLeave(
-  _: EmployeeState,
-  formData: FormData,
-): Promise<EmployeeState> {
+export async function decideLeave(_: EmployeeState, formData: FormData): Promise<EmployeeState> {
   try {
     const leaveId = formData.get("leave_id");
     const decision = formData.get("decision");
@@ -108,6 +83,7 @@ export async function decideLeave(
     revalidatePath("/");
     return { error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       error: error instanceof Error ? error.message : "พิจารณาคำขอไม่สำเร็จ",
     };
@@ -139,6 +115,7 @@ export async function createAnnouncement(
 
     return { message, error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     revalidatePath("/announcements");
     revalidatePath("/");
     return {
@@ -148,10 +125,7 @@ export async function createAnnouncement(
   }
 }
 
-export async function updateEmployee(
-  _: EmployeeState,
-  formData: FormData,
-): Promise<EmployeeState> {
+export async function updateEmployee(_: EmployeeState, formData: FormData): Promise<EmployeeState> {
   try {
     const body: Record<string, unknown> = Object.fromEntries(formData);
     const numericFields = [
@@ -177,6 +151,7 @@ export async function updateEmployee(
     revalidatePath("/employees");
     return { error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       error: error instanceof Error ? error.message : "บันทึกไม่สำเร็จ",
     };
@@ -185,7 +160,9 @@ export async function updateEmployee(
 
 export async function retryAnnouncement(formData: FormData) {
   const announcementId = formData.get("id");
-  await api(`/api/admin/announcements/${announcementId}/retry`, { method: "POST" });
+  await api(`/api/admin/announcements/${announcementId}/retry`, {
+    method: "POST",
+  });
   revalidatePath("/announcements");
 }
 
@@ -235,6 +212,7 @@ export async function saveFaq(
       : "บันทึกแล้ว ใช้การค้นสำรองจนกว่าจะสร้างดัชนีได้";
     return { message, error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       message: "",
       error: error instanceof Error ? error.message : "บันทึกไม่สำเร็จ",
@@ -247,10 +225,10 @@ export async function uploadPolicy(
   formData: FormData,
 ): Promise<AnnouncementState> {
   try {
-    const data = await api<{ indexed: boolean; chunk_count: number }>(
-      "/api/admin/documents",
-      { method: "POST", body: formData },
-    );
+    const data = await api<{ indexed: boolean; chunk_count: number }>("/api/admin/documents", {
+      method: "POST",
+      body: formData,
+    });
     revalidatePath("/knowledge");
 
     const indexMessage = data.indexed ? "" : " ใช้การค้นสำรองจนกว่าจะสร้างดัชนีได้";
@@ -259,6 +237,7 @@ export async function uploadPolicy(
       error: "",
     };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       message: "",
       error: error instanceof Error ? error.message : "นำเข้าไม่สำเร็จ",
@@ -272,9 +251,7 @@ export async function archivePolicy(formData: FormData) {
   revalidatePath("/knowledge");
 }
 
-export async function reindexPolicies(
-  _: AnnouncementState,
-): Promise<AnnouncementState> {
+export async function reindexPolicies(_: AnnouncementState): Promise<AnnouncementState> {
   try {
     const data = await api<{ indexed: boolean }>("/api/admin/documents/reindex", {
       method: "POST",
@@ -284,6 +261,7 @@ export async function reindexPolicies(
       : "สร้างดัชนีไม่สำเร็จ ระบบยังใช้การค้นสำรองได้";
     return { message, error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       message: "",
       error: error instanceof Error ? error.message : "สร้างดัชนีไม่สำเร็จ",
@@ -303,6 +281,7 @@ export async function previewAnswer(
     });
     return { message: data.answer ?? "ไม่พบคำตอบในฐานข้อมูล HR", error: "" };
   } catch (error) {
+    unstable_rethrow(error);
     return {
       message: "",
       error: error instanceof Error ? error.message : "ค้นหาไม่สำเร็จ",

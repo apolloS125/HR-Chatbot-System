@@ -2,13 +2,7 @@
 
 import { useActionState, useRef, type FormEvent } from "react";
 
-import {
-  createEmployee,
-  deleteEmployee,
-  removeEmployee,
-  updateEmployee,
-  type EmployeeState,
-} from "../app/actions";
+import { createEmployee, deleteEmployee, updateEmployee, type EmployeeState } from "../app/actions";
 import type { Employee } from "../lib/api";
 
 const initialState: EmployeeState = { error: "" };
@@ -38,15 +32,15 @@ export function EmployeeForm({ canManageRoles = false }: { canManageRoles?: bool
       </label>
       <label className="grid gap-1.5 text-sm font-medium">
         บทบาท
-      <select className={field} name="role" defaultValue="employee">
-        <option value="employee">พนักงาน</option>
-        {canManageRoles && (
-          <>
-            <option value="hr">HR</option>
-            <option value="admin">Admin</option>
-          </>
-        )}
-      </select>
+        <select className={field} name="role" defaultValue="employee">
+          <option value="employee">พนักงาน</option>
+          {canManageRoles && (
+            <>
+              <option value="hr">HR</option>
+              <option value="admin">Admin</option>
+            </>
+          )}
+        </select>
       </label>
       <button
         className="min-h-11 self-end rounded-lg bg-[#087747] px-3 font-bold text-white transition hover:bg-[#06643b] disabled:cursor-wait disabled:opacity-60 max-xl:col-start-2 max-sm:col-auto"
@@ -54,7 +48,11 @@ export function EmployeeForm({ canManageRoles = false }: { canManageRoles?: bool
       >
         {pending ? "กำลังเพิ่ม…" : "เพิ่มพนักงาน"}
       </button>
-      {state.error && <small role="alert" className="col-span-full text-sm text-[#b32222]">{state.error}</small>}
+      {state.error && (
+        <small role="alert" className="col-span-full text-sm text-[#b32222]">
+          {state.error}
+        </small>
+      )}
     </form>
   );
 }
@@ -90,39 +88,11 @@ export function EmployeeStatusButton({
       >
         {active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
       </button>
-      {state.error && <p role="alert" className="text-xs text-red-700">{state.error}</p>}
-    </form>
-  );
-}
-
-export function EmployeeDeleteButton({
-  employeeId,
-  name,
-}: {
-  employeeId: string;
-  name: string;
-}) {
-  const [state, action, pending] = useActionState(removeEmployee, initialState);
-
-  function confirmDeletion(event: FormEvent<HTMLFormElement>) {
-    const message = `ลบข้อมูล ${name} ทั้งหมดถาวรหรือไม่? ประวัติวันลาและเอกสารจะถูกลบ และนำอีเมลกลับมาใช้ได้`;
-
-    if (!window.confirm(message)) {
-      event.preventDefault();
-    }
-  }
-
-  return (
-    <form action={action} onSubmit={confirmDeletion}>
-      <input type="hidden" name="employee_id" value={employeeId} />
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-11 whitespace-nowrap rounded-lg px-2 text-sm text-[#a32727] hover:bg-red-50 disabled:opacity-50"
-      >
-        {pending ? "กำลังลบ…" : "ลบถาวร"}
-      </button>
-      {state.error && <p role="alert" className="text-xs text-red-700">{state.error}</p>}
+      {state.error && (
+        <p role="alert" className="text-xs text-red-700">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }
@@ -217,9 +187,7 @@ export function EditEmployeeForm({
           ) : (
             <input type="hidden" name="role" value={employee.role} />
           )}
-          <p className="text-xs">
-            วันลาปี {employee.balances_year}: คงเหลือ / สิทธิ์ต่อปี
-          </p>
+          <p className="text-xs">วันลาปี {employee.balances_year}: คงเหลือ / สิทธิ์ต่อปี</p>
           {leaveTypes.map(([key, label]) => (
             <div key={key} className="grid grid-cols-2 gap-2">
               <label>
@@ -256,7 +224,11 @@ export function EditEmployeeForm({
           >
             {pending ? "กำลังบันทึก…" : "บันทึก"}
           </button>
-          {state.error && <p role="alert" className="text-red-700">{state.error}</p>}
+          {state.error && (
+            <p role="alert" className="text-red-700">
+              {state.error}
+            </p>
+          )}
         </form>
       </dialog>
     </div>

@@ -2,10 +2,11 @@ import json
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Annotated
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
@@ -14,12 +15,12 @@ from .core import (
     PUBLIC_BASE_URL,
     audit,
     cache,
+    create_dashboard_session,
     db,
     document_view,
     file_response,
     hash_password,
     require_admin,
-    seaweed_delete,
     sha256,
     transaction,
 )
@@ -58,9 +59,7 @@ def employee_view(item):
 
 def check_employee_permission(actor, employee, new_role=None, password=None):
     restricted_employee_change = (
-        employee["role"] != "employee"
-        or new_role not in {None, "employee"}
-        or password
+        employee["role"] != "employee" or new_role not in {None, "employee"} or password
     )
     if actor["role"] != "admin" and restricted_employee_change:
         raise HTTPException(status_code=403, detail="เฉพาะ Admin จัดการบทบาทและรหัสผ่านได้")
@@ -68,7 +67,20 @@ def check_employee_permission(actor, employee, new_role=None, password=None):
 
 @router.get("/session")
 async def admin_session(actor=Depends(require_admin)):
-    return actor
+    return {"id": actor["id"], "role": actor["role"]}
+
+
+@router.post("/session")
+async def login_dashboard(actor=Depends(require_admin), database=Depends(db), redis=Depends(cache)):
+    token = await create_dashboard_session(actor, database, redis)
+    return {"token": token, "expires_in": 3600}
+
+
+@router.delete("/session")
+async def logout_dashboard(request: Request, redis=Depends(cache)):
+    token = request.headers.get("authorization", "").removeprefix("Bearer ")
+    await redis.delete(f"dashboard-session:{sha256(token)}")
+    return {"ok": True}
 
 
 @router.get("/summary")
@@ -81,9 +93,7 @@ async def admin_summary(database=Depends(db), redis=Depends(cache)):
         "linked_employees": await database.employees.count_documents(
             {"active": True, "line_user_id": {"$exists": True}}
         ),
-        "pending_leaves": await database.leave_requests.count_documents(
-            {"status": "pending"}
-        ),
+        "pending_leaves": await database.leave_requests.count_documents({"status": "pending"}),
     }
     await redis.setex("summary", 30, json.dumps(result))
     return result
@@ -138,6 +148,7 @@ async def update_employee(
 ):
     if data.employee_code != employee_id:
         raise HTTPException(status_code=422, detail="ไม่สามารถเปลี่ยนรหัสพนักงาน")
+
     async def update(session):
         employee = await database.employees.find_one({"_id": employee_id}, session=session)
         if not employee:
@@ -171,6 +182,7 @@ async def update_employee(
         )
         await audit(database, actor, "employee.update", employee_id, session)
         return employee_view(changed)
+
     try:
         return await transaction(database, update)
     except DuplicateKeyError:
@@ -223,6 +235,7 @@ async def set_employee_active(
         )
         action = "employee.activate" if data.active else "employee.deactivate"
         await audit(database, actor, action, employee_id, session)
+
     await transaction(database, update)
     await redis.delete("summary")
     return {"ok": True}
@@ -235,53 +248,9 @@ async def delete_employee(
     redis=Depends(cache),
     actor=Depends(require_admin),
 ):
-    employee = await database.employees.find_one({"_id": employee_id})
-    if not employee:
-        raise HTTPException(status_code=404, detail="employee not found")
-    check_employee_permission(actor, employee)
-    if employee_id == actor["id"]:
-        raise HTTPException(status_code=409, detail="ไม่สามารถลบบัญชีตนเอง")
-
-    files = [item async for item in database.files.find({"employee_code": employee_id}, {"fid": 1})]
-    try:
-        for item in files:
-            if item.get("fid"):
-                await seaweed_delete(item["fid"])
-    except httpx.HTTPError as error:
-        raise HTTPException(
-            status_code=503,
-            detail="ลบเอกสารจากระบบจัดเก็บไม่สำเร็จ กรุณาลองใหม่",
-        ) from error
-
-    async def remove(session):
-        current = await database.employees.find_one({"_id": employee_id}, session=session)
-        if not current:
-            raise HTTPException(status_code=404, detail="employee not found")
-        check_employee_permission(actor, current)
-        if employee_id == actor["id"]:
-            raise HTTPException(status_code=409, detail="ไม่สามารถลบบัญชีตนเอง")
-        await database.leave_requests.delete_many({"employee_code": employee_id}, session=session)
-        await database.files.delete_many({"employee_code": employee_id}, session=session)
-        await database.line_oauth_sessions.delete_many(
-            {"employee_code": employee_id},
-            session=session,
-        )
-        if current.get("line_user_id"):
-            await database.announcements.update_many(
-                {"deliveries.to": current["line_user_id"]},
-                {"$pull": {"deliveries.$[].to": current["line_user_id"]}},
-                session=session,
-            )
-        await database.audit_logs.delete_many(
-            {"$or": [{"subject": employee_id}, {"actor": employee_id}]},
-            session=session,
-        )
-        await database.employees.delete_one({"_id": employee_id}, session=session)
-        await audit(database, actor, "employee.delete", employee_id, session)
-
-    await transaction(database, remove)
-    await redis.delete("summary")
-    return {"ok": True}
+    return await set_employee_active(
+        employee_id, ActiveUpdate(active=False), database, redis, actor
+    )
 
 
 @router.get("/attachments/{file_id}")
@@ -340,9 +309,7 @@ async def deliver_announcement(database, announcement_id):
                 {"$set": values},
             )
             if claimed.modified_count != 1:
-                current = await database.announcements.find_one(
-                    {"_id": announcement_id}
-                )
+                current = await database.announcements.find_one({"_id": announcement_id})
                 return document_view(current)
             lease = renewal
             message = announcement_message(
@@ -378,13 +345,10 @@ async def create_announcement(
     key = data.request_key or secrets.token_urlsafe(24)
     announcement_id = f"AN-{sha256(actor['id'] + ':' + key)[:24]}"
     recipient_query = {"active": True, "line_user_id": {"$exists": True}}
-    recipients = [
-        item["line_user_id"]
-        async for item in database.employees.find(recipient_query)
-    ]
+    recipients = [item["line_user_id"] async for item in database.employees.find(recipient_query)]
     deliveries = [
         {
-            "to": recipients[offset:offset + 500],
+            "to": recipients[offset : offset + 500],
             "retry_key": str(uuid.uuid4()),
             "sent": False,
         }
@@ -401,6 +365,7 @@ async def create_announcement(
         "deliveries": deliveries,
     }
     try:
+
         async def create(session):
             await database.announcements.insert_one(announcement, session=session)
             await audit(database, actor, "announcement.create", announcement_id, session)
@@ -424,12 +389,26 @@ async def retry_announcement(
 
 
 @router.get("/leaves")
-async def list_leaves(database=Depends(db)):
-    employees = {item["_id"]: item["name"] async for item in database.employees.find({})}
-    leaves = database.leave_requests.find({}).sort("created_at", -1).limit(500)
+async def list_leaves(
+    database=Depends(db),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    leaves = [
+        item
+        async for item in database.leave_requests.find({})
+        .sort("created_at", -1)
+        .skip(offset)
+        .limit(limit)
+    ]
+    employee_ids = list({item["employee_code"] for item in leaves})
+    employees = {
+        item["_id"]: item["name"]
+        async for item in database.employees.find({"_id": {"$in": employee_ids}}, {"name": 1})
+    }
     result = [
         {**document_view(item), "name": employees.get(item["employee_code"], "-")}
-        async for item in leaves
+        for item in leaves
     ]
     return sorted(result, key=lambda value: value["status"] != "pending")
 
@@ -457,12 +436,7 @@ async def notify_leave(database, leave_id):
     if not until:
         await database.leave_requests.update_one(
             {"_id": leave_id},
-            {
-                "$set": {
-                    "notification_expires_at": datetime.now(timezone.utc)
-                    + timedelta(hours=23)
-                }
-            },
+            {"$set": {"notification_expires_at": datetime.now(timezone.utc) + timedelta(hours=23)}},
         )
     label = "อนุมัติแล้ว" if leave["status"] == "approved" else "ไม่อนุมัติ"
     try:
@@ -495,13 +469,16 @@ async def decide_leave(
 ):
     if actor["role"] not in {"hr", "admin"}:
         raise HTTPException(status_code=403, detail="HR access required")
+
     async def decide(session):
         leave = await database.leave_requests.find_one(
             {"_id": leave_id, "status": "pending"},
             session=session,
         )
         if not leave:
-            raise HTTPException(status_code=409, detail="leave request was already decided or not found")
+            raise HTTPException(
+                status_code=409, detail="leave request was already decided or not found"
+            )
         employee = await database.employees.find_one_and_update(
             {"_id": leave["employee_code"]},
             {"$inc": {"leave_revision": 1}},
@@ -521,9 +498,7 @@ async def decide_leave(
                 "_id": employee["_id"],
                 f"balances.{leave['leave_type']}": {"$gte": leave["days"]},
             }
-            balance_update = {
-                "$inc": {f"balances.{leave['leave_type']}": -leave["days"]}
-            }
+            balance_update = {"$inc": {f"balances.{leave['leave_type']}": -leave["days"]}}
             balance = await database.employees.update_one(
                 balance_query,
                 balance_update,
@@ -545,6 +520,7 @@ async def decide_leave(
             session=session,
         )
         await audit(database, actor, f"leave.{data.decision}", leave_id, session)
+
     await transaction(database, decide)
     if redis is not None:
         await redis.delete("summary")

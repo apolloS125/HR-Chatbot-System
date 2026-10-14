@@ -46,14 +46,14 @@ async def line_login_prompt(employee_code: str, link_code: str, database=Depends
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ยืนยันบัญชี LINE</title>
     <style>
-      body {
+      body {{
         color: #173b2b;
         font-family: system-ui, sans-serif;
         margin: 12vh auto;
         max-width: 28rem;
         padding: 1.5rem;
-      }
-      .primary-button {
+      }}
+      .primary-button {{
         background: #087747;
         border: 0;
         border-radius: .75rem;
@@ -61,7 +61,7 @@ async def line_login_prompt(employee_code: str, link_code: str, database=Depends
         font-size: 1rem;
         font-weight: 700;
         padding: .9rem 1.2rem;
-      }
+      }}
     </style>
   </head>
   <body>

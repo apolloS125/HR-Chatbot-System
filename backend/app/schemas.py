@@ -1,5 +1,5 @@
-from datetime import date
 import re
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -97,7 +97,7 @@ class AnnouncementCreate(BaseModel):
 
 
 class LiffSessionCreate(BaseModel):
-    id_token: str = Field(min_length=1)
+    id_token: str = Field(min_length=1, max_length=8192)
 
 
 class LiffLeaveCreate(BaseModel):

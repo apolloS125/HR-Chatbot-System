@@ -1,4 +1,5 @@
 """Allowlisted tool registry. Add external sources here; never execute user-supplied URLs."""
+
 from collections.abc import Awaitable, Callable
 from typing import Any
 

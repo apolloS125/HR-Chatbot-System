@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
 
-from app.chatbot import business_days, parse_leave_command
+from app.chatbot import parse_leave_command
+from app.leaves import business_days
 from app.line_client import announcement_message
 
 
@@ -15,6 +16,7 @@ def test_parse_leave_command():
         date(2026, 8, 21),
         "ไปต่างจังหวัด",
     )
+
 
 def test_parse_leave_command_with_only_start_date():
     assert parse_leave_command("ขอลา ป่วย 2026-08-20") == (
