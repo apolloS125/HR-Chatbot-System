@@ -25,7 +25,7 @@ def mock_http(monkeypatch, handler):
         "AsyncClient",
         lambda **options: original(
             transport=httpx.MockTransport(handler),
-            **options,
+            **{key: value for key, value in options.items() if key != "transport"},
         ),
     )
 
@@ -192,6 +192,8 @@ def test_policy_without_evidence_does_not_call_llm(monkeypatch):
         ("balance", 0.2, None),
         ("approve", 1, None),
         ("balance", 2, None),
+        ("balance", True, None),
+        ("balance", "0.99", None),
     ],
 )
 def test_jev_uses_only_allowed_confident_intents(monkeypatch, choice, confidence, expected):
@@ -467,7 +469,15 @@ def test_liff_session_uses_line_verified_id_token(monkeypatch):
     def handler(request):
         assert str(request.url) == "https://api.line.me/oauth2/v2.1/verify"
         assert request.content == b"id_token=client-id-token&client_id=liff-channel"
-        return httpx.Response(200, json={"sub": "U123"})
+        return httpx.Response(
+            200,
+            json={
+                "sub": "U123",
+                "iss": "https://access.line.me",
+                "aud": "liff-channel",
+                "exp": 4102444800,
+            },
+        )
 
     mock_http(monkeypatch, handler)
     database = SimpleNamespace(employees=SimpleNamespace(find_one=find_employee))
@@ -582,7 +592,7 @@ def test_webhook_defers_work_and_isolates_failed_events(monkeypatch):
     async def receive():
         return {"type": "http.request", "body": json.dumps({"events": events}).encode()}
 
-    redis = SimpleNamespace(set=set_value, delete=delete)
+    redis = SimpleNamespace(set=set_value, delete=delete, eval=AsyncMock(return_value=0))
     application = SimpleNamespace(state=SimpleNamespace(mongo=object(), redis=redis))
     request = Request({"type": "http", "app": application}, receive)
     monkeypatch.setattr(chatbot, "valid_line_signature", lambda *_: True)

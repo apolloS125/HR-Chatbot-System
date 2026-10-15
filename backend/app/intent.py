@@ -2,6 +2,7 @@ import os
 
 import httpx
 
+from .http_client import outbound_client
 from .privacy import mask_text
 from .schemas import IntentResult
 
@@ -20,7 +21,7 @@ async def classify_intent(text: str) -> str | None:
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=3) as client:
+        async with outbound_client(timeout=3) as client:
             response = await client.post(
                 "https://api.typesafe.ai/v1/systemone",
                 headers={"Authorization": f"Bearer {TYPESAFE_API_KEY}"},

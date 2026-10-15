@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Uplo
 
 from .core import (
     LIFF_CHANNEL_ID,
+    cache,
     db,
     document_view,
     file_response,
@@ -16,6 +17,8 @@ from .core import (
     seaweed_upload,
 )
 from .leaves import cancel_leave, read_balances, submit_leave
+from .line_identity import verify_line_identity
+from .rate_limit import enforce_limit, limit_liff_session
 from .schemas import LiffLeaveCreate, LiffSessionCreate
 
 router = APIRouter(prefix="/api/liff")
@@ -26,8 +29,9 @@ MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
 async def current_employee(
     authorization: Annotated[str | None, Header()] = None,
     database=Depends(db),
+    redis=Depends(cache),
 ):
-    token = authorization.removeprefix("Bearer ") if authorization else ""
+    token = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
     user_id = read_liff_token(token)
     employee = (
         await database.employees.find_one({"line_user_id": user_id, "active": True})
@@ -36,21 +40,16 @@ async def current_employee(
     )
     if not employee:
         raise HTTPException(status_code=401, detail="LIFF session is invalid or expired")
+    await enforce_limit(redis, "liff-api", employee["_id"], 120)
     return employee
 
 
-@router.post("/session")
+@router.post("/session", dependencies=[Depends(limit_liff_session)])
 async def create_session(data: LiffSessionCreate, database=Depends(db)):
     if not LIFF_CHANNEL_ID:
         raise HTTPException(status_code=503, detail="LIFF is not configured")
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.post(
-            "https://api.line.me/oauth2/v2.1/verify",
-            data={"id_token": data.id_token, "client_id": LIFF_CHANNEL_ID},
-        )
-
-    user_id = response.json().get("sub") if response.is_success else None
+    user_id = await verify_line_identity(data.id_token, LIFF_CHANNEL_ID)
     employee = (
         await database.employees.find_one({"line_user_id": user_id, "active": True})
         if user_id

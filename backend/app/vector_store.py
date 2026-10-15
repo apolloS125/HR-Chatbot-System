@@ -6,6 +6,7 @@ import uuid
 
 import httpx
 
+from .http_client import outbound_client
 from .privacy import mask_text
 
 VECTOR_SIZE = 128
@@ -82,7 +83,7 @@ async def policy_vectors(texts: list[str]) -> list[list[float]]:
         return [embed_text(text) for text in texts]
 
     # ponytail: index the first 1500 characters per FAQ; split longer policies into document chunks.
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with outbound_client(timeout=15) as client:
         response = await client.post(
             "https://api.openai.com/v1/embeddings",
             headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},

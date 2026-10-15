@@ -7,15 +7,20 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pymongo.errors import DuplicateKeyError
 
 from .core import (
     LINE_LOGIN_CHANNEL_ID,
     LINE_LOGIN_CHANNEL_SECRET,
     PUBLIC_BASE_URL,
+    audit,
     base64url,
     db,
     sha256,
+    transaction,
 )
+from .http_client import outbound_client
+from .line_identity import verify_line_identity
 
 router = APIRouter(prefix="/auth/line")
 
@@ -29,6 +34,7 @@ async def line_login_prompt(employee_code: str, link_code: str, database=Depends
         {
             "_id": employee_code.upper(),
             "active": True,
+            "line_user_id": {"$exists": False},
             "link_code_hash": sha256(link_code),
             "link_code_expires_at": {"$gt": datetime.now(timezone.utc)},
         }
@@ -90,19 +96,23 @@ async def line_login_start(
     if not LINE_LOGIN_CHANNEL_ID or not LINE_LOGIN_CHANNEL_SECRET:
         raise HTTPException(status_code=503, detail="LINE Login is not configured")
 
+    state = secrets.token_urlsafe(32)
     employee = await database.employees.find_one_and_update(
         {
             "_id": employee_code.upper(),
             "active": True,
+            "line_user_id": {"$exists": False},
             "link_code_hash": sha256(link_code),
             "link_code_expires_at": {"$gt": datetime.now(timezone.utc)},
         },
-        {"$unset": {"link_code_hash": "", "link_code_expires_at": ""}},
+        {
+            "$unset": {"link_code_hash": "", "link_code_expires_at": ""},
+            "$set": {"line_link_version": state},
+        },
     )
     if not employee:
         raise HTTPException(status_code=400, detail="link is invalid or expired")
 
-    state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     verifier = secrets.token_urlsafe(64)
     await database.line_oauth_sessions.insert_one(
@@ -138,50 +148,29 @@ async def line_login_callback(code: str, state: str, database=Depends(db)):
     if not session:
         raise HTTPException(status_code=400, detail="login session is invalid or expired")
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        token = await client.post(
-            "https://api.line.me/oauth2/v2.1/token",
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": f"{PUBLIC_BASE_URL}/auth/line/callback",
-                "client_id": LINE_LOGIN_CHANNEL_ID,
-                "client_secret": LINE_LOGIN_CHANNEL_SECRET,
-                "code_verifier": session["code_verifier"],
-            },
-        )
-        if token.is_error or not token.json().get("id_token"):
-            raise HTTPException(status_code=400, detail="LINE identity verification failed")
-        verify = await client.post(
-            "https://api.line.me/oauth2/v2.1/verify",
-            data={
-                "id_token": token.json().get("id_token"),
-                "client_id": LINE_LOGIN_CHANNEL_ID,
-                "nonce": session["nonce"],
-            },
-        )
-
-    user_id = verify.json().get("sub") if verify.is_success else None
-    if not user_id:
-        raise HTTPException(status_code=400, detail="LINE identity verification failed")
-
-    linked = await database.employees.find_one(
-        {"line_user_id": user_id, "_id": {"$ne": session["employee_code"]}}
-    )
-    if linked:
-        raise HTTPException(status_code=409, detail="LINE account is linked to another employee")
-
-    employee = await database.employees.find_one_and_update(
-        {"_id": session["employee_code"], "active": True},
-        {
-            "$set": {
-                "line_user_id": user_id,
-                "line_linked_at": datetime.now(timezone.utc),
-            }
-        },
-    )
-    if not employee:
-        raise HTTPException(status_code=409, detail="employee account is inactive")
+    try:
+        async with outbound_client() as client:
+            token = await client.post(
+                "https://api.line.me/oauth2/v2.1/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": f"{PUBLIC_BASE_URL}/auth/line/callback",
+                    "client_id": LINE_LOGIN_CHANNEL_ID,
+                    "client_secret": LINE_LOGIN_CHANNEL_SECRET,
+                    "code_verifier": session["code_verifier"],
+                },
+            )
+            token.raise_for_status()
+            id_token = token.json()["id_token"]
+            if not isinstance(id_token, str) or not id_token:
+                raise ValueError("missing ID token")
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=503, detail="LINE Login is unavailable") from error
+    except (ValueError, KeyError, TypeError) as error:
+        raise HTTPException(status_code=400, detail="LINE identity verification failed") from error
+    user_id = await verify_line_identity(id_token, LINE_LOGIN_CHANNEL_ID, session["nonce"])
+    await bind_line_account(database, session["employee_code"], user_id, state)
 
     page = """<!doctype html>
 <html lang="th">
@@ -194,4 +183,30 @@ async def line_login_callback(code: str, state: str, database=Depends(db)):
     <p>กลับไปใช้งาน HR Chatbot ใน LINE ได้เลย</p>
   </body>
 </html>"""
-    return HTMLResponse(page)
+    return HTMLResponse(page, headers={"Cache-Control": "no-store"})
+
+
+async def bind_line_account(database, employee_code: str, user_id: str, version: str):
+    async def bind(session):
+        employee = await database.employees.find_one_and_update(
+            {
+                "_id": employee_code,
+                "active": True,
+                "line_user_id": {"$exists": False},
+                "line_link_version": version,
+            },
+            {"$set": {"line_user_id": user_id, "line_linked_at": datetime.now(timezone.utc)}},
+            session=session,
+        )
+        if not employee:
+            raise HTTPException(status_code=409, detail="employee is inactive or already linked")
+        await audit(
+            database, {"id": f"line:{user_id}"}, "employee.line_bind", employee_code, session
+        )
+
+    try:
+        await transaction(database, bind)
+    except DuplicateKeyError as error:
+        raise HTTPException(
+            status_code=409, detail="LINE account is linked to another employee"
+        ) from error

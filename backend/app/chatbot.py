@@ -14,6 +14,7 @@ from .intent import classify_intent
 from .knowledge import answer_policy
 from .leaves import read_balances, submit_leave
 from .line_client import announcement_carousel, reply_line
+from .rate_limit import enforce_limit
 from .schemas import LeaveDecision
 
 router = APIRouter()
@@ -51,6 +52,8 @@ async def line_webhook(
     if not valid_line_signature(body, x_line_signature):
         raise HTTPException(status_code=401, detail="invalid LINE signature")
 
+    await enforce_limit(request.app.state.redis, "line-webhook", "channel", 1200)
+
     try:
         events = json.loads(body).get("events", [])
         if not isinstance(events, list) or any(not isinstance(event, dict) for event in events):
@@ -79,6 +82,15 @@ async def process_event(database, redis, event):
             claimed = await redis.set(key, "processing", nx=True, ex=120)
             if not claimed:
                 return
+            user_id = event.get("source", {}).get("userId")
+            if user_id:
+                try:
+                    await enforce_limit(redis, "line-user", user_id, 20)
+                except HTTPException as error:
+                    if error.status_code != 429:
+                        raise
+                    await redis.set(key, "done", ex=86400)
+                    return
             await reply_to_event(database, redis, event)
             await redis.set(key, "done", ex=86400)
         except Exception as error:

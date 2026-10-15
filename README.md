@@ -61,6 +61,10 @@ Use this URL instead of opening `https://<frontend-domain>/liff` directly so the
 
 From the Dashboard, click **Issue LINE link** for the employee, send the generated link to the employee, and ask them to open it within 30 minutes. The link is single-use. After successful LINE Login, the `LINE user ID` is bound to the employee code, and the chatbot only allows employees whose status is still `Active`.
 
+Both LINE Login and LIFF send ID tokens to LINE's server-side verify endpoint. The backend checks issuer, Channel ID (`aud`), expiry (`exp`), and the OAuth nonce before using the verified `sub`; browser-supplied user IDs are rejected. LIFF and Dashboard check the employee's current active status on every authenticated request.
+
+An existing LINE binding must be removed with **ยกเลิกการผูก LINE** in the Dashboard before issuing another link. The protected `DELETE /api/admin/employees/{employee_id}/line` endpoint also supports this operation. Binding and unbinding write audit entries in the same MongoDB transaction as the account change. A unique LINE user ID index and conditional updates prevent duplicate or replacement bindings, including concurrent callbacks. Unbinding invalidates pending OAuth callbacks and blocks existing LIFF sessions for the removed LINE identity.
+
 ## Chat Commands
 
 ```text
@@ -74,6 +78,12 @@ When backend `LIFF_APP_ID` is configured, `เมนู` and `ขอลา` incl
 
 LINE webhook verifies the signature and schedules bounded, concurrent background processing after sending HTTP 200. A failed event does not fail the batch. Redis suppresses duplicate completed events for 24 hours; leave submissions also keep their database idempotency keys. Background tasks are in-process: a process crash after acknowledgement can lose pending work. Use a durable inbox/worker if crash recovery is required.
 
+Redis limits LIFF session creation to 10 requests per connection IP per minute, authenticated LIFF APIs to 120 per employee per minute, and valid signed webhook requests to 1,200 per channel per minute. Excess HTTP requests return 429 with `Retry-After`; unavailable Redis returns 503. Only signed webhook payloads consume the channel quota. Each LINE user may trigger processing of 20 events per minute; excess events are acknowledged and discarded. Client-supplied forwarded headers do not choose limiter keys. Configure a trusted ingress before relying on connection IP limits behind a reverse proxy.
+
+Attachments accept at most 10 MB of PDF/JPEG/PNG data and check content signatures against the supplied MIME type. SeaweedFS has no published host port; downloads go through authenticated APIs with employee ownership checks and `private, no-store` caching. Keep storage ports private when changing the deployment topology.
+
+Outbound HTTP clients use explicit connect/pool timeouts of 3 seconds and operation-specific read/write timeouts of 3–20 seconds. Connections retry at most twice; read/write failures and HTTP status errors do not automatically replay side-effecting requests. Clients close at the end of each operation, including exceptions, so no application HTTP pool remains open at shutdown. LINE push/multicast keep their existing stable retry keys for manual retries.
+
 Policy questions search active FAQs and imported policy documents. Answers include the FAQ question or document filename and page as a source. HR can add/edit/disable FAQs, upload text-based PDF or UTF-8 TXT policies, archive documents, rebuild the search index, and preview chatbot answers at `/knowledge`.
 
 Documents are limited to 10 MB, 100 PDF pages, and 200,000 extracted characters. LangChain splits text into 1,000-character chunks with 200-character overlap. Scanned or encrypted PDFs are rejected; OCR is outside this scope. Extracted text and source metadata are stored in MongoDB. The original policy file is not retained.
@@ -85,6 +95,8 @@ Common email addresses, phone numbers, national ID numbers, and employee IDs are
 ### Jev guardrails and routing
 
 Set `TYPESAFE_API_KEY` to enable [Jev by TypeSafe](https://docs.typesafe.ai/introduction). Free-text questions are classified as balance, announcements, menu, policy, or other. Confident balance/menu/news requests use ordinary application code; exact commands bypass Jev. Low-confidence, invalid, or failed decisions fall back to policy search. Jev does not approve leave or change employee data. Jev HTTP calls use the existing `httpx` client library.
+
+Jev results pass typed allowlist and confidence validation before routing. Leave types and dates come from validated LIFF forms or deterministic chat commands, never generated LLM fields; the leave service rechecks allowed types, date ranges, active status, overlaps, and balances before committing a request.
 
 Before intent routing, Jev screens free-text input using `policy_violation` (Choice), `jailbreak` (Noul), and `severity` (Score). The state contains `user_message` and six `assistant_policy` rules shared with the answer model. Policy answers also screen the question and retrieved reference text together before generation or cache reuse, including Dashboard previews. This checks for instructions injected into policy documents.
 

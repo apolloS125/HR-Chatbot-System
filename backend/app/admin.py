@@ -196,21 +196,59 @@ async def issue_link_code(
     actor=Depends(require_admin),
 ):
     code = secrets.token_urlsafe(12)
-    employee = await database.employees.find_one({"_id": employee_id, "active": True})
-    if not employee:
-        raise HTTPException(status_code=404, detail="active employee not found")
-    check_employee_permission(actor, employee)
     link_code = {
         "link_code_hash": sha256(code),
         "link_code_expires_at": datetime.now(timezone.utc) + timedelta(minutes=30),
     }
-    await database.employees.update_one(
-        {"_id": employee_id, "active": True},
-        {"$set": link_code},
-    )
-    await audit(database, actor, "employee.line_link", employee_id)
+
+    async def issue(session):
+        employee = await database.employees.find_one(
+            {"_id": employee_id, "active": True}, session=session
+        )
+        if not employee:
+            raise HTTPException(status_code=404, detail="active employee not found")
+        check_employee_permission(actor, employee)
+        if "line_user_id" in employee:
+            raise HTTPException(status_code=409, detail="ยกเลิกการผูก LINE เดิมก่อนสร้างลิงก์ใหม่")
+        await database.employees.update_one(
+            {"_id": employee_id},
+            {"$set": link_code, "$unset": {"line_link_version": ""}},
+            session=session,
+        )
+        await audit(database, actor, "employee.line_link", employee_id, session)
+
+    await transaction(database, issue)
     link = f"{PUBLIC_BASE_URL}/auth/line/start?employee_code={employee_id}&link_code={code}"
     return {"expires_in_minutes": 30, "link": link}
+
+
+@router.delete("/employees/{employee_id}/line")
+async def unlink_line_account(employee_id: str, database=Depends(db), actor=Depends(require_admin)):
+    async def unlink(session):
+        employee = await database.employees.find_one({"_id": employee_id}, session=session)
+        if not employee:
+            raise HTTPException(status_code=404, detail="employee not found")
+        check_employee_permission(actor, employee)
+        await database.employees.update_one(
+            {"_id": employee_id},
+            {
+                "$unset": {
+                    "line_user_id": "",
+                    "line_linked_at": "",
+                    "link_code_hash": "",
+                    "link_code_expires_at": "",
+                    "line_link_version": "",
+                }
+            },
+            session=session,
+        )
+        await database.line_oauth_sessions.delete_many(
+            {"employee_code": employee_id}, session=session
+        )
+        await audit(database, actor, "employee.line_unbind", employee_id, session)
+
+    await transaction(database, unlink)
+    return {"ok": True}
 
 
 @router.patch("/employees/{employee_id}/active")

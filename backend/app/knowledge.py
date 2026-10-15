@@ -34,6 +34,7 @@ from .guardrails import (
     UNAVAILABLE_MESSAGE,
     check_guardrail,
 )
+from .http_client import outbound_client
 from .observability import finish_generation, start_generation
 from .privacy import mask_text
 from .schemas import FaqCreate, PolicyQuestion
@@ -82,7 +83,7 @@ async def answer_policy(database, question: str, redis=None) -> str | None:
             )
         ]
     if not matches:
-        async with httpx.AsyncClient(
+        async with outbound_client(
             base_url=WEAVIATE_URL,
             timeout=5,
         ) as client:
@@ -140,7 +141,7 @@ async def _llm(
     observation = start_generation(OPENAI_MODEL, inputs)
     output = SUMMARY_UNAVAILABLE
     usage = {}
-    client = http_client or httpx.AsyncClient(timeout=15)
+    client = http_client or outbound_client(timeout=15)
     try:
         model = ChatOpenAI(
             model=OPENAI_MODEL,
@@ -170,7 +171,7 @@ async def _llm(
 
 async def index_policies(policies):
     try:
-        async with httpx.AsyncClient(
+        async with outbound_client(
             base_url=WEAVIATE_URL,
             timeout=10,
         ) as client:

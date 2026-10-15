@@ -16,12 +16,13 @@ from langchain_core.runnables import RunnableLambda
 from motor.motor_asyncio import AsyncIOMotorClient
 from redis.asyncio import Redis
 
-from app import admin, answer_cache, auth, core, knowledge, leaves, vector_store
+from app import admin, answer_cache, auth, core, knowledge, leaves, liff, vector_store
 from app.admin import create_announcement, decide_leave, delete_employee, deliver_announcement
 from app.chatbot import handle_message
 from app.core import cache, db, hash_password, issue_liff_token
 from app.leaves import cancel_leave, current_balances, submit_leave
 from app.main import app
+from app.rate_limit import enforce_limit
 from app.schemas import AnnouncementCreate, LeaveDecision
 
 ACTOR = {"id": "HR001", "role": "admin"}
@@ -131,6 +132,7 @@ def mongo(monkeypatch):
                 "line_user_id": "U123",
             }
             await database.employees.insert_one(employee)
+            await database.employees.create_index("line_user_id", unique=True, sparse=True)
             await database.leave_requests.create_index("source_event_id", unique=True, sparse=True)
             try:
                 return await scenario(database)
@@ -370,7 +372,7 @@ def test_announcement_retry_keeps_batch_keys_and_skips_sent_batches(mongo, monke
     monkeypatch.setattr(admin, "multicast_line", send)
 
     async def scenario(database):
-        employees = [{"_id": f"P{i}", "active": True, "line_user_id": f"U{i}"} for i in range(500)]
+        employees = [{"_id": f"P{i}", "active": True, "line_user_id": f"UP{i}"} for i in range(500)]
         await database.employees.insert_many(employees)
         data = AnnouncementCreate(
             title="ประกาศ", body="ข้อความ", request_key="same-request-key-1234"
@@ -586,10 +588,11 @@ def test_line_link_preview_does_not_consume_code(mongo, monkeypatch):
         await database.employees.update_one(
             {"_id": "E001"},
             {
+                "$unset": {"line_user_id": ""},
                 "$set": {
                     "link_code_hash": core.sha256(code),
                     "link_code_expires_at": expires_at,
-                }
+                },
             },
         )
         page = await auth.line_login_prompt("E001", code, database)
@@ -605,6 +608,179 @@ def test_line_link_preview_does_not_consume_code(mongo, monkeypatch):
         with pytest.raises(HTTPException) as error:
             await auth.line_login_start("E001", code, database)
         assert error.value.status_code == 400
+
+    mongo(scenario)
+
+
+def test_line_binding_cannot_replace_or_duplicate_accounts(mongo):
+    async def scenario(database):
+        await database.employees.insert_many(
+            [
+                {"_id": "E002", "active": True, "line_link_version": "v2"},
+                {"_id": "E003", "active": True, "line_link_version": "v3"},
+            ]
+        )
+        with pytest.raises(HTTPException) as error:
+            await auth.bind_line_account(database, "E001", "attacker", "v1")
+        assert error.value.status_code == 409
+        assert (await database.employees.find_one({"_id": "E001"}))["line_user_id"] == "U123"
+        await auth.bind_line_account(database, "E002", "new-user", "v2")
+        with pytest.raises(HTTPException) as error:
+            await auth.bind_line_account(database, "E003", "new-user", "v3")
+        assert error.value.status_code == 409
+        assert "line_user_id" not in await database.employees.find_one({"_id": "E003"})
+        assert await database.audit_logs.count_documents({"action": "employee.line_bind"}) == 1
+
+    mongo(scenario)
+
+
+def test_concurrent_line_callbacks_only_bind_once(mongo):
+    async def scenario(database):
+        await database.employees.update_one(
+            {"_id": "E001"},
+            {"$unset": {"line_user_id": ""}, "$set": {"line_link_version": "version"}},
+        )
+        results = await asyncio.gather(
+            auth.bind_line_account(database, "E001", "user-a", "version"),
+            auth.bind_line_account(database, "E001", "user-b", "version"),
+            return_exceptions=True,
+        )
+        assert sum(isinstance(result, HTTPException) for result in results) == 1
+        assert await database.audit_logs.count_documents({"action": "employee.line_bind"}) == 1
+
+    mongo(scenario)
+
+
+def test_line_binding_rolls_back_when_audit_fails(mongo, monkeypatch):
+    monkeypatch.setattr(auth, "audit", AsyncMock(side_effect=RuntimeError("audit unavailable")))
+
+    async def scenario(database):
+        await database.employees.update_one(
+            {"_id": "E001"},
+            {"$unset": {"line_user_id": ""}, "$set": {"line_link_version": "version"}},
+        )
+        with pytest.raises(RuntimeError):
+            await auth.bind_line_account(database, "E001", "user-a", "version")
+        assert "line_user_id" not in await database.employees.find_one({"_id": "E001"})
+
+    mongo(scenario)
+
+
+def test_unlink_invalidates_liff_and_inflight_oauth_and_records_audit(mongo):
+    async def scenario(database):
+        redis = app.dependency_overrides[cache]()
+        token = core.issue_liff_token("U123")
+        await database.employees.update_one(
+            {"_id": "E001"}, {"$set": {"line_link_version": "inflight"}}
+        )
+        await database.line_oauth_sessions.insert_one({"_id": "inflight", "employee_code": "E001"})
+        await admin.unlink_line_account("E001", database, ACTOR)
+        assert await database.line_oauth_sessions.count_documents({}) == 0
+        with pytest.raises(HTTPException):
+            await liff.current_employee(f"Bearer {token}", database, redis)
+        with pytest.raises(HTTPException):
+            await auth.bind_line_account(database, "E001", "user-a", "inflight")
+        log = await database.audit_logs.find_one({"action": "employee.line_unbind"})
+        assert log["actor"] == "HR001" and log["subject"] == "E001"
+
+    mongo(scenario)
+
+
+def test_existing_liff_session_stops_working_after_deactivation(mongo):
+    async def scenario(database):
+        app.dependency_overrides[db] = lambda: database
+        headers = {"Authorization": f"Bearer {core.issue_liff_token('U123')}"}
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            assert (await client.get("/api/liff/announcements", headers=headers)).status_code == 200
+            await database.employees.update_one({"_id": "E001"}, {"$set": {"active": False}})
+            for path in ("/announcements", "/leaves", "/balances", "/attachments/F-1"):
+                response = await client.get(f"/api/liff{path}", headers=headers)
+                assert response.status_code == 401
+            response = await client.post(
+                "/api/liff/leaves",
+                headers=headers,
+                json={
+                    "leave_type": "vacation",
+                    "start_date": monday().isoformat(),
+                    "end_date": monday().isoformat(),
+                    "request_key": "request-key-123456",
+                },
+            )
+            assert response.status_code == 401
+
+    mongo(scenario)
+
+
+def test_liff_limits_are_atomic_and_separate_employees(mongo):
+    async def scenario(database):
+        redis = app.dependency_overrides[cache]()
+        results = await asyncio.gather(
+            *(enforce_limit(redis, "liff-api", "E001", 3) for _ in range(10)),
+            return_exceptions=True,
+        )
+        assert sum(result is None for result in results) == 3
+        assert sum(isinstance(result, HTTPException) for result in results) == 7
+        await enforce_limit(redis, "liff-api", "E002", 3)
+        key = f"rate:liff-api:{core.sha256('E001')}"
+        assert 0 < await redis.ttl(key) <= 60
+        await redis.delete(key)
+        await enforce_limit(redis, "liff-api", "E001", 3)
+        await redis.set(key, 3, px=900)
+        with pytest.raises(HTTPException) as error:
+            await enforce_limit(redis, "liff-api", "E001", 3)
+        assert error.value.headers == {"Retry-After": "1"}
+
+    mongo(scenario)
+
+
+def test_liff_session_endpoint_is_rate_limited_before_calling_line(mongo, monkeypatch):
+    verify = AsyncMock(return_value="U123")
+    monkeypatch.setattr(liff, "verify_line_identity", verify)
+    monkeypatch.setattr(liff, "LIFF_CHANNEL_ID", "channel")
+
+    async def scenario(database):
+        app.dependency_overrides[db] = lambda: database
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            for _ in range(10):
+                response = await client.post("/api/liff/session", json={"id_token": "token"})
+                assert response.status_code == 200
+            response = await client.post("/api/liff/session", json={"id_token": "token"})
+            assert response.status_code == 429 and "Retry-After" in response.headers
+            assert verify.await_count == 10
+
+    mongo(scenario)
+
+
+def test_issue_link_requires_unlink_and_invalidates_previous_callback(mongo):
+    async def scenario(database):
+        with pytest.raises(HTTPException) as error:
+            await admin.issue_link_code("E001", database, ACTOR)
+        assert error.value.status_code == 409
+        await admin.unlink_line_account("E001", database, ACTOR)
+        await database.employees.update_one(
+            {"_id": "E001"}, {"$set": {"line_link_version": "old-callback"}}
+        )
+        link = await admin.issue_link_code("E001", database, ACTOR)
+        assert "link_code=" in link["link"]
+        with pytest.raises(HTTPException):
+            await auth.bind_line_account(database, "E001", "user-a", "old-callback")
+        assert await database.audit_logs.count_documents({"action": "employee.line_link"}) == 1
+
+    mongo(scenario)
+
+
+def test_unlink_rolls_back_if_audit_fails(mongo, monkeypatch):
+    monkeypatch.setattr(admin, "audit", AsyncMock(side_effect=RuntimeError("audit unavailable")))
+
+    async def scenario(database):
+        with pytest.raises(RuntimeError):
+            await admin.unlink_line_account("E001", database, ACTOR)
+        employee = await database.employees.find_one({"_id": "E001"})
+        assert employee["line_user_id"] == "U123"
 
     mongo(scenario)
 

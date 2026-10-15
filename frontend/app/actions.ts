@@ -70,6 +70,19 @@ export async function issueLink(_: InviteState, formData: FormData): Promise<Inv
   }
 }
 
+export async function unlinkLine(_: EmployeeState, formData: FormData): Promise<EmployeeState> {
+  try {
+    const employeeId = formData.get("employee_id");
+    await api(`/api/admin/employees/${employeeId}/line`, { method: "DELETE" });
+    revalidatePath("/employees");
+    revalidatePath("/");
+    return { error: "" };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "ยกเลิกการผูก LINE ไม่สำเร็จ" };
+  }
+}
+
 export async function decideLeave(_: EmployeeState, formData: FormData): Promise<EmployeeState> {
   try {
     const leaveId = formData.get("leave_id");

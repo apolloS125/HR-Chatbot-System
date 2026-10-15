@@ -162,7 +162,7 @@ export default async function EmployeesPage({
               {employee.active &&
                 !employee.line_linked &&
                 (canManageRoles || employee.role === "employee") && (
-                  <InviteButton employeeId={employee.id} />
+                  <InviteButton employeeId={employee.id} linked={employee.line_linked} />
                 )}
               {(canManageRoles || employee.role === "employee") && employee.id !== actor.id && (
                 <div className="flex gap-3">

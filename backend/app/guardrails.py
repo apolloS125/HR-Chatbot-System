@@ -1,6 +1,7 @@
 import httpx
 
 from . import intent
+from .http_client import outbound_client
 from .privacy import mask_text
 from .schemas import JailbreakResult, PolicyViolationResult, SeverityResult
 
@@ -60,7 +61,7 @@ async def check_guardrail(question: str, context: str = "") -> str | None:
             "reference_material": mask_text(context),
         }
     try:
-        async with httpx.AsyncClient(timeout=3) as client:
+        async with outbound_client(timeout=3) as client:
             response = await client.post(
                 "https://api.typesafe.ai/v1/systemone",
                 headers={"Authorization": f"Bearer {intent.TYPESAFE_API_KEY}"},

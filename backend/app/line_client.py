@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-import httpx
 from fastapi import HTTPException
 
 from .core import LINE_CHANNEL_ACCESS_TOKEN
+from .http_client import outbound_client
 
 
 def announcement_date(value: datetime | None) -> str:
@@ -157,7 +157,7 @@ async def reply_line(reply_token: str, message: str | dict[str, object]) -> None
     else:
         line_message = message
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with outbound_client(timeout=10) as client:
         response = await client.post(
             "https://api.line.me/v2/bot/message/reply",
             headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
@@ -170,7 +170,7 @@ async def send_line(path: str, payload: dict, retry_key: str) -> None:
     if not LINE_CHANNEL_ACCESS_TOKEN:
         raise HTTPException(status_code=503, detail="LINE Messaging API is not configured")
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with outbound_client(timeout=15) as client:
         response = await client.post(
             f"https://api.line.me/v2/bot/message/{path}",
             headers={

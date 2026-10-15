@@ -52,7 +52,7 @@ class PolicyQuestion(BaseModel):
 class IntentResult(BaseModel):
     type: Literal["choice"]
     choice: Literal["balance", "announcements", "menu", "policy", "other"]
-    confidence: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1, strict=True)
 
 
 class PolicyViolationResult(BaseModel):
@@ -97,7 +97,16 @@ class AnnouncementCreate(BaseModel):
 
 
 class LiffSessionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     id_token: str = Field(min_length=1, max_length=8192)
+
+
+class LineIdentity(BaseModel):
+    iss: str
+    sub: str = Field(min_length=1, max_length=255)
+    aud: str
+    exp: int = Field(strict=True)
+    nonce: str | None = None
 
 
 class LiffLeaveCreate(BaseModel):

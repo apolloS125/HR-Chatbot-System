@@ -20,6 +20,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from .http_client import outbound_client
 from .observability import shutdown_tracing
 from .vector_store import WEAVIATE_API_KEY, ensure_policy_index, weaviate_headers
 
@@ -104,7 +105,7 @@ async def lifespan(app: FastAPI):
     # Weaviate is a rebuildable index, never source of truth.
     try:
         policies = [policy async for policy in app.state.mongo.faqs.find({"active": True})]
-        async with httpx.AsyncClient(base_url=WEAVIATE_URL, timeout=3) as client:
+        async with outbound_client(base_url=WEAVIATE_URL, timeout=3) as client:
             await ensure_policy_index(client, policies)
     except (httpx.HTTPError, ValueError, KeyError):
         logging.getLogger(__name__).warning(
@@ -383,7 +384,7 @@ def read_liff_token(token: str) -> str | None:
 
 
 async def seaweed_upload(name: str, content: bytes, content_type: str) -> str:
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with outbound_client(timeout=20) as client:
         response = await client.get(f"{SEAWEED_MASTER_URL}/dir/assign")
         response.raise_for_status()
         assigned = response.json()
@@ -397,7 +398,7 @@ async def seaweed_upload(name: str, content: bytes, content_type: str) -> str:
 
 
 async def seaweed_location(fid: str) -> str:
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with outbound_client(timeout=10) as client:
         response = await client.get(
             f"{SEAWEED_MASTER_URL}/dir/lookup",
             params={"volumeId": fid.partition(",")[0]},
@@ -408,7 +409,7 @@ async def seaweed_location(fid: str) -> str:
 
 async def seaweed_read(fid: str) -> bytes:
     volume_url = await seaweed_location(fid)
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with outbound_client(timeout=20) as client:
         response = await client.get(f"http://{volume_url}/{fid}")
         response.raise_for_status()
         return response.content
@@ -421,7 +422,7 @@ async def seaweed_delete(fid: str) -> None:
         if error.response.status_code == 404:
             return
         raise
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with outbound_client(timeout=20) as client:
         response = await client.delete(f"http://{volume_url}/{fid}")
         if response.status_code == 404:
             return
@@ -429,7 +430,7 @@ async def seaweed_delete(fid: str) -> None:
 
 
 async def storage_health() -> None:
-    async with httpx.AsyncClient(timeout=3) as client:
+    async with outbound_client(timeout=3) as client:
         weaviate, seaweed = await asyncio.gather(
             client.get(f"{WEAVIATE_URL}/v1/.well-known/ready", headers=weaviate_headers()),
             client.get(f"{SEAWEED_MASTER_URL}/cluster/status"),

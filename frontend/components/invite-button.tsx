@@ -1,12 +1,13 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { issueLink, type InviteState } from "../app/actions";
+import { issueLink, unlinkLine, type InviteState } from "../app/actions";
 
 const initialState: InviteState = { link: "", error: "" };
 
-export function InviteButton({ employeeId }: { employeeId: string }) {
+export function InviteButton({ employeeId, linked }: { employeeId: string; linked: boolean }) {
   const [state, action, pending] = useActionState(issueLink, initialState);
+  const [unlinkState, unlinkAction, unlinkPending] = useActionState(unlinkLine, { error: "" });
   const input = useRef<HTMLInputElement>(null);
   const [copyStatus, setCopyStatus] = useState("");
 
@@ -28,17 +29,28 @@ export function InviteButton({ employeeId }: { employeeId: string }) {
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <form action={action}>
+      <form
+        action={linked ? unlinkAction : action}
+        onSubmit={(event) => {
+          if (linked && !window.confirm("ยกเลิกการผูก LINE ของพนักงานนี้ใช่หรือไม่?")) {
+            event.preventDefault();
+          }
+        }}
+      >
         <input type="hidden" name="employee_id" value={employeeId} />
         <button
           className={`min-h-11 rounded-lg bg-[#e7f5ed] px-3 text-sm font-bold
             text-[#087747] disabled:cursor-wait disabled:opacity-60`}
-          disabled={pending}
+          disabled={pending || unlinkPending}
         >
-          {pending ? "กำลังสร้าง…" : "ออกลิงก์ LINE"}
+          {pending || unlinkPending
+            ? "กำลังบันทึก…"
+            : linked
+              ? "ยกเลิกการผูก LINE"
+              : "ออกลิงก์ LINE"}
         </button>
       </form>
-      {state.link && (
+      {!linked && state.link && (
         <>
           <a
             className="basis-full [overflow-wrap:anywhere] text-[11px] text-[#087747]"
@@ -70,9 +82,9 @@ export function InviteButton({ employeeId }: { employeeId: string }) {
           )}
         </>
       )}
-      {state.error && (
+      {(state.error || unlinkState.error) && (
         <small role="alert" className="basis-full text-sm text-[#b32222]">
-          {state.error}
+          {state.error || unlinkState.error}
         </small>
       )}
     </div>
