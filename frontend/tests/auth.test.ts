@@ -71,9 +71,11 @@ describe("Dashboard sessions", () => {
   });
 
   test("rate-limited login does not create a cookie", async () => {
-    spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 429 }));
+    spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("", { status: 429, headers: { "Retry-After": "8" } }),
+    );
     const result = await login({ error: "" }, credentials());
-    expect(result.error).toContain("5 นาที");
+    expect(result.error).toContain("8 วินาที");
     expect(values.size).toBe(0);
   });
 

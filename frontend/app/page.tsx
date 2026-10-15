@@ -22,18 +22,27 @@ export default async function Dashboard() {
   const pending = leaves.filter((leave) => leave.status === "pending").slice(0, 5);
 
   return (
-    <main className="mx-auto w-[calc(100%-3rem)] max-w-[1240px] py-10 max-md:w-[calc(100%-1.75rem)] max-md:py-7">
+    <main
+      className={`mx-auto w-[calc(100%-3rem)] max-w-[1240px] py-10
+      max-md:w-[calc(100%-1.75rem)] max-md:py-7`}
+    >
       <header className="mb-7 flex items-end justify-between gap-6">
         <div>
           <span className="text-[11px] font-extrabold tracking-[.17em] text-[#087747]">
             OVERVIEW
           </span>
-          <h1 className="mt-1 mb-1 text-[clamp(1.75rem,3vw,2.45rem)] leading-tight font-bold tracking-[-.04em]">
+          <h1
+            className={`mt-1 mb-1 text-[clamp(1.75rem,3vw,2.45rem)] leading-tight
+            font-bold tracking-[-.04em]`}
+          >
             สวัสดี ทีม HR
           </h1>
           <p className="text-sm text-[#6d7a72]">ภาพรวมระบบและรายการที่ต้องจัดการวันนี้</p>
         </div>
-        <time className="shrink-0 rounded-full border border-[#e1e9e3] bg-white px-3 py-2 text-xs text-[#6d7a72] max-md:hidden">
+        <time
+          className={`shrink-0 rounded-full border border-[#e1e9e3] bg-white px-3 py-2
+          text-xs text-[#6d7a72] max-md:hidden`}
+        >
           {new Intl.DateTimeFormat("th-TH", { dateStyle: "full" }).format(new Date())}
         </time>
       </header>
@@ -65,7 +74,10 @@ export default async function Dashboard() {
         />
       </section>
 
-      <section className="mt-[18px] grid grid-cols-[minmax(0,1.25fr)_minmax(330px,.75fr)] items-start gap-[18px] max-lg:grid-cols-1">
+      <section
+        className={`mt-[18px] grid grid-cols-[minmax(0,1.25fr)_minmax(330px,.75fr)]
+        items-start gap-[18px] max-lg:grid-cols-1`}
+      >
         <article className={panel}>
           <PanelTitle
             title="คำขอลาที่รอดำเนินการ"
@@ -76,11 +88,16 @@ export default async function Dashboard() {
           <div>
             {pending.map((leave) => (
               <Link
-                className="grid min-h-[67px] grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-[#edf2ee] px-5 py-3 transition last:border-b-0 hover:bg-[#f9fbfa]"
+                className={`grid min-h-[67px] grid-cols-[auto_1fr_auto] items-center gap-3
+                  border-b border-[#edf2ee] px-5 py-3 transition last:border-b-0
+                  hover:bg-[#f9fbfa]`}
                 href="/leaves"
                 key={leave.id}
               >
-                <span className="grid size-[38px] place-items-center rounded-xl bg-[#123c2a] font-extrabold text-white">
+                <span
+                  className={`grid size-[38px] place-items-center rounded-xl bg-[#123c2a]
+                  font-extrabold text-white`}
+                >
                   {leave.name.slice(0, 1)}
                 </span>
                 <div className="min-w-0">
@@ -90,7 +107,10 @@ export default async function Dashboard() {
                     {formatDate(leave.start_date)} – {formatDate(leave.end_date)} · {leave.days} วัน
                   </small>
                 </div>
-                <span className="rounded-full bg-[#fff3d1] px-2.5 py-1 text-[11px] font-bold text-[#885b00] max-sm:hidden">
+                <span
+                  className={`rounded-full bg-[#fff3d1] px-2.5 py-1 text-[11px] font-bold
+                  text-[#885b00] max-sm:hidden`}
+                >
                   {statusLabels.pending}
                 </span>
               </Link>
@@ -111,11 +131,16 @@ export default async function Dashboard() {
           <div>
             {announcements.slice(0, 4).map((announcement) => (
               <Link
-                className="grid min-h-[67px] grid-cols-[auto_1fr] items-center gap-3 border-b border-[#edf2ee] px-5 py-3 transition last:border-b-0 hover:bg-[#f9fbfa]"
+                className={`grid min-h-[67px] grid-cols-[auto_1fr] items-center gap-3
+                  border-b border-[#edf2ee] px-5 py-3 transition last:border-b-0
+                  hover:bg-[#f9fbfa]`}
                 href="/announcements"
                 key={announcement.id}
               >
-                <span className="grid size-9 place-items-center rounded-[10px] bg-[#e7f5ed] text-[#087747]">
+                <span
+                  className={`grid size-9 place-items-center rounded-[10px] bg-[#e7f5ed]
+                  text-[#087747]`}
+                >
                   ◫
                 </span>
                 <div className="min-w-0">
@@ -157,7 +182,10 @@ function Stat({
   return (
     <Link
       href={href}
-      className="grid grid-cols-[auto_1fr_auto] items-center gap-3.5 rounded-2xl border border-[#e1e9e3] bg-white p-5 shadow-[0_10px_30px_#264c3510] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_#264c3519] max-md:p-4"
+      className={`grid grid-cols-[auto_1fr_auto] items-center gap-3.5 rounded-2xl
+        border border-[#e1e9e3] bg-white p-5
+        shadow-[0_10px_30px_#264c3510] transition hover:-translate-y-0.5
+        hover:shadow-[0_14px_32px_#264c3519] max-md:p-4`}
     >
       <span
         className={`grid size-[42px] place-items-center rounded-xl font-extrabold ${tones[tone]}`}
@@ -185,7 +213,10 @@ function PanelTitle({
   link: string;
 }) {
   return (
-    <div className="flex min-h-[74px] items-center justify-between gap-4 border-b border-[#eaf0eb] px-5 py-4">
+    <div
+      className={`flex min-h-[74px] items-center justify-between gap-4 border-b
+      border-[#eaf0eb] px-5 py-4`}
+    >
       <div>
         <h2 className="mb-1 text-base font-bold">{title}</h2>
         <p className="text-xs text-[#6d7a72]">{detail}</p>

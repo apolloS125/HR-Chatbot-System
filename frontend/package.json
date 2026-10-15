@@ -7,7 +7,8 @@
     "start": "next start",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "format:check": "prettier --check app components lib proxy.ts next.config.ts tests"
+    "format:check": "prettier --check app components lib proxy.ts next.config.ts tests scripts",
+    "lint:lines": "bun scripts/check-lines.ts"
   },
   "dependencies": {
     "@line/liff": "^2.31.1",

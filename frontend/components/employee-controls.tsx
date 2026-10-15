@@ -16,7 +16,8 @@ export function EmployeeForm({ canManageRoles = false }: { canManageRoles?: bool
   return (
     <form
       action={action}
-      className="grid grid-cols-[1fr_1.6fr_1.8fr_1fr_auto] gap-2.5 p-5 max-xl:grid-cols-2 max-sm:grid-cols-1"
+      className={`grid grid-cols-[1fr_1.6fr_1.8fr_1fr_auto] gap-2.5 p-5
+        max-xl:grid-cols-2 max-sm:grid-cols-1`}
     >
       <label className="grid gap-1.5 text-sm font-medium">
         รหัสพนักงาน
@@ -43,7 +44,9 @@ export function EmployeeForm({ canManageRoles = false }: { canManageRoles?: bool
         </select>
       </label>
       <button
-        className="min-h-11 self-end rounded-lg bg-[#087747] px-3 font-bold text-white transition hover:bg-[#06643b] disabled:cursor-wait disabled:opacity-60 max-xl:col-start-2 max-sm:col-auto"
+        className={`min-h-11 self-end rounded-lg bg-[#087747] px-3 font-bold
+          text-white transition hover:bg-[#06643b] disabled:cursor-wait
+          disabled:opacity-60 max-xl:col-start-2 max-sm:col-auto`}
         disabled={pending}
       >
         {pending ? "กำลังเพิ่ม…" : "เพิ่มพนักงาน"}
@@ -84,7 +87,8 @@ export function EmployeeStatusButton({
       <button
         type="submit"
         disabled={pending}
-        className="min-h-11 whitespace-nowrap rounded-lg px-2 text-sm text-[#6d7a72] hover:bg-[#f2f5f3] disabled:opacity-50"
+        className={`min-h-11 whitespace-nowrap rounded-lg px-2 text-sm text-[#6d7a72]
+          hover:bg-[#f2f5f3] disabled:opacity-50`}
       >
         {active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
       </button>
@@ -116,7 +120,8 @@ export function EditEmployeeForm({
     <div className="mt-3 border-t pt-3 text-sm">
       <button
         type="button"
-        className="min-h-11 w-full rounded-lg border border-[#cad7ce] px-3 font-semibold text-[#087747] hover:bg-[#e7f5ed]"
+        className={`min-h-11 w-full rounded-lg border border-[#cad7ce] px-3
+          font-semibold text-[#087747] hover:bg-[#e7f5ed]`}
         onClick={() => dialog.current?.showModal()}
       >
         แก้ไขข้อมูลและวันลา
@@ -124,7 +129,9 @@ export function EditEmployeeForm({
       <dialog
         ref={dialog}
         aria-labelledby={`edit-${employee.id}`}
-        className="m-auto max-h-[90dvh] w-[min(42rem,calc(100%-2rem))] overflow-y-auto rounded-2xl border border-[#e1e9e3] bg-white p-0 text-sm shadow-2xl backdrop:bg-black/40"
+        className={`m-auto max-h-[90dvh] w-[min(42rem,calc(100%-2rem))]
+          overflow-y-auto rounded-2xl border border-[#e1e9e3] bg-white p-0
+          text-sm shadow-2xl backdrop:bg-black/40`}
       >
         <div className="flex items-center justify-between border-b border-[#edf1ee] px-5 py-4">
           <h2 id={`edit-${employee.id}`} className="m-0 text-lg font-bold">
@@ -220,7 +227,8 @@ export function EditEmployeeForm({
           ))}
           <button
             disabled={pending}
-            className="min-h-11 rounded-lg bg-[#087747] p-2 font-semibold text-white disabled:opacity-50"
+            className={`min-h-11 rounded-lg bg-[#087747] p-2 font-semibold text-white
+              disabled:opacity-50`}
           >
             {pending ? "กำลังบันทึก…" : "บันทึก"}
           </button>

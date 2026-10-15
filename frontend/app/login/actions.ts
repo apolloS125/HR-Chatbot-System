@@ -22,9 +22,10 @@ export async function login(_: { error: string }, formData: FormData) {
       },
     );
     if (!response.ok) {
+      const retryAfter = Math.max(1, Number(response.headers.get("Retry-After")) || 1);
       const error =
         response.status === 429
-          ? "ลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอ 5 นาที"
+          ? `ลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอ ${retryAfter} วินาที`
           : response.status >= 500
             ? "ระบบเข้าสู่ระบบยังไม่พร้อม กรุณาลองใหม่"
             : "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง หรือบัญชีไม่มีสิทธิ์ HR";

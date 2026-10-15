@@ -439,7 +439,7 @@ def test_personal_hr_credentials_and_role_enforcement(mongo):
     mongo(scenario)
 
 
-def test_redis_login_limit_is_atomic_and_expires(mongo):
+def test_redis_backoff_is_atomic_progressive_and_account_scoped(mongo):
     async def scenario(database):
         app.dependency_overrides[db] = lambda: database
         redis = app.dependency_overrides[cache]()
@@ -451,15 +451,50 @@ def test_redis_login_limit_is_atomic_and_expires(mongo):
                 for _ in range(15)
             ]
             responses = await asyncio.gather(*requests)
-            assert sum(response.status_code == 401 for response in responses) == 10
-            assert sum(response.status_code == 429 for response in responses) == 5
-            key = f"login-account:{core.sha256('MISSING')}"
+            assert sum(response.status_code == 401 for response in responses) == 1
+            assert sum(response.status_code == 429 for response in responses) == 14
+            key = f"login-backoff:{core.sha256('MISSING')}"
+            assert await redis.hget(key, "failures") == "1"
             assert 0 < await redis.ttl(key) <= 300
-            await redis.expire(key, 0)
-            response = await client.get(
-                "/api/admin/session", headers=basic_credentials("missing", "wrong")
+            for delay in (2, 4, 8, 16, 30, 30):
+                await redis.hset(key, "next_at", 0)
+                failed = await client.get(
+                    "/api/admin/session", headers=basic_credentials("missing", "wrong")
+                )
+                assert failed.status_code == 401
+                blocked = await client.get(
+                    "/api/admin/session", headers=basic_credentials("missing", "wrong")
+                )
+                assert blocked.status_code == 429
+                assert int(blocked.headers["Retry-After"]) == delay
+            for index in range(60):
+                response = await client.get(
+                    "/api/admin/session", headers=basic_credentials(f"other-{index}", "wrong")
+                )
+                assert response.status_code == 401
+            await database.employees.insert_one(
+                {
+                    "_id": "HR002",
+                    "active": True,
+                    "role": "hr",
+                    "password_hash": hash_password("strong-password"),
+                }
             )
-            assert response.status_code == 401
+            response = await client.post(
+                "/api/admin/session", headers=basic_credentials("HR002", "strong-password")
+            )
+            assert response.status_code == 200
+            token = response.json()["token"]
+            response = await client.get(
+                "/api/admin/session", headers={"Authorization": f"Bearer {token}"}
+            )
+            assert response.status_code == 200
+            await redis.delete(key)
+            assert (
+                await client.get(
+                    "/api/admin/session", headers=basic_credentials("missing", "wrong")
+                )
+            ).status_code == 401
 
     mongo(scenario)
 

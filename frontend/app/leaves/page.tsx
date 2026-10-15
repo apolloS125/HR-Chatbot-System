@@ -23,6 +23,14 @@ export default async function LeavesPage({
   const leaves = await get<Leave[]>(`/api/admin/leaves?limit=${pageSize}&offset=${offset}`);
   const selectedStatus = params.status ?? "all";
   const query = params.q?.trim() ?? "";
+  function pageLink(nextOffset: number) {
+    const search = new URLSearchParams({
+      status: selectedStatus,
+      q: query,
+      offset: String(nextOffset),
+    });
+    return `/leaves?${search}`;
+  }
   const pending = leaves.filter((leave) => leave.status === "pending").length;
   const visibleLeaves = leaves
     .filter((leave) => {
@@ -42,18 +50,27 @@ export default async function LeavesPage({
   ];
 
   return (
-    <main className="mx-auto w-[calc(100%-3rem)] max-w-[1240px] py-10 max-md:w-[calc(100%-1.75rem)] max-md:py-7">
+    <main
+      className={`mx-auto w-[calc(100%-3rem)] max-w-[1240px] py-10
+      max-md:w-[calc(100%-1.75rem)] max-md:py-7`}
+    >
       <header className="mb-7 flex items-end justify-between gap-6 max-sm:block">
         <div>
           <span className="text-[11px] font-extrabold tracking-[.17em] text-[#087747]">
             LEAVE REQUESTS
           </span>
-          <h1 className="mt-1 mb-1 text-[clamp(1.75rem,3vw,2.45rem)] leading-tight font-bold tracking-[-.04em]">
+          <h1
+            className={`mt-1 mb-1 text-[clamp(1.75rem,3vw,2.45rem)] leading-tight
+            font-bold tracking-[-.04em]`}
+          >
             คำขอลา
           </h1>
           <p className="text-sm text-[#6d7a72]">ตรวจสอบและอนุมัติคำขอลาของพนักงาน</p>
         </div>
-        <span className="shrink-0 rounded-full border border-[#e1e9e3] bg-white px-3 py-2 text-xs text-[#6d7a72] max-sm:mt-3 max-sm:inline-flex">
+        <span
+          className={`shrink-0 rounded-full border border-[#e1e9e3] bg-white px-3 py-2
+          text-xs text-[#6d7a72] max-sm:mt-3 max-sm:inline-flex`}
+        >
           {pending} รออนุมัติในหน้านี้
         </span>
       </header>
@@ -64,7 +81,12 @@ export default async function LeavesPage({
             key={status}
             href={`/leaves?${new URLSearchParams({ status, q: query })}`}
             aria-current={selectedStatus === status ? "page" : undefined}
-            className={`flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold ${selectedStatus === status ? "bg-[#087747] text-white" : "border border-[#e1e9e3] bg-white text-[#5d6961] hover:bg-[#e7f5ed]"}`}
+            className={`flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold ${
+              selectedStatus === status
+                ? `bg-[#087747] text-white`
+                : `border border-[#e1e9e3] bg-white text-[#5d6961]
+              hover:bg-[#e7f5ed]`
+            }`}
           >
             {label}
           </Link>
@@ -79,7 +101,8 @@ export default async function LeavesPage({
             name="q"
             defaultValue={query}
             placeholder="ชื่อหรือรหัสพนักงาน"
-            className="mt-1.5 min-h-11 w-full rounded-xl border border-[#cad7ce] bg-white px-3 font-normal"
+            className={`mt-1.5 min-h-11 w-full rounded-xl border border-[#cad7ce]
+              bg-white px-3 font-normal`}
           />
         </label>
         <button className="min-h-11 rounded-xl bg-[#087747] px-5 text-sm font-bold text-white">
@@ -95,8 +118,14 @@ export default async function LeavesPage({
         )}
       </form>
 
-      <section className="overflow-hidden rounded-2xl border border-[#e1e9e3] bg-white shadow-[0_10px_30px_#264c3510]">
-        <div className="flex min-h-[74px] items-center justify-between gap-4 border-b border-[#eaf0eb] px-5 py-4">
+      <section
+        className={`overflow-hidden rounded-2xl border border-[#e1e9e3] bg-white
+        shadow-[0_10px_30px_#264c3510]`}
+      >
+        <div
+          className={`flex min-h-[74px] items-center justify-between gap-4 border-b
+          border-[#eaf0eb] px-5 py-4`}
+        >
           <div>
             <h2 className="mb-1 text-base font-bold">รายการคำขอลา</h2>
             <p className="text-xs text-[#6d7a72]">เรียงรายการที่รออนุมัติขึ้นก่อน</p>
@@ -125,7 +154,8 @@ export default async function LeavesPage({
 
                 return (
                   <tr
-                    className="border-b border-[#edf1ee] transition last:border-0 hover:bg-[#fbfcfb]"
+                    className={`border-b border-[#edf1ee] transition last:border-0
+                      hover:bg-[#fbfcfb]`}
                     key={leave.id}
                   >
                     <td className="px-4 py-3.5 text-sm">
@@ -155,7 +185,8 @@ export default async function LeavesPage({
                     </td>
                     <td className="px-4 py-3.5">
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClass}`}
+                        className={`inline-flex rounded-full px-2.5 py-1
+                          text-[11px] font-bold ${statusClass}`}
                       >
                         {statusLabel}
                       </span>
@@ -194,20 +225,8 @@ export default async function LeavesPage({
         </div>
       </section>
       <nav aria-label="หน้าประวัติคำขอลา" className="mt-5 flex justify-between gap-4 text-sm">
-        {offset > 0 && (
-          <Link
-            href={`/leaves?${new URLSearchParams({ status: selectedStatus, q: query, offset: String(Math.max(0, offset - pageSize)) })}`}
-          >
-            หน้าก่อนหน้า
-          </Link>
-        )}
-        {leaves.length === pageSize && (
-          <Link
-            href={`/leaves?${new URLSearchParams({ status: selectedStatus, q: query, offset: String(offset + pageSize) })}`}
-          >
-            หน้าถัดไป
-          </Link>
-        )}
+        {offset > 0 && <Link href={pageLink(Math.max(0, offset - pageSize))}>หน้าก่อนหน้า</Link>}
+        {leaves.length === pageSize && <Link href={pageLink(offset + pageSize)}>หน้าถัดไป</Link>}
       </nav>
     </main>
   );

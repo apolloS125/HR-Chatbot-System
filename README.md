@@ -43,7 +43,7 @@ Create a `LINE Login channel` and a `Messaging API channel` under the same Provi
 - Messaging API webhook URL: `https://<backend-domain>/line/webhook`
 - Put the Channel ID, Secret, and Access token in `.env`
 - Set `PUBLIC_BASE_URL` to the HTTPS URL of the backend that LINE can access
-- Create a LIFF app in the LINE Login channel, set the Endpoint URL to `https://<frontend-domain>/liff`, and then set `NEXT_PUBLIC_LIFF_ID`
+- Create a LIFF app in the LINE Login channel, set the Endpoint URL to `https://<frontend-domain>/liff`, and then set both backend `LIFF_APP_ID` and frontend `NEXT_PUBLIC_LIFF_ID` to that app ID
 - Set `PUBLIC_BACKEND_URL` to the HTTPS URL of the backend that the browser can access, and `LIFF_ORIGIN` to the frontend URL
 - Set `LIFF_SESSION_SECRET` to a long random value and do not use the default
 
@@ -70,7 +70,7 @@ From the Dashboard, click **Issue LINE link** for the employee, send the generat
 ขอลา พักร้อน 2026-08-20 2026-08-21 ธุระครอบครัว
 ```
 
-When `NEXT_PUBLIC_LIFF_ID` is configured, `เมนู` and `ขอลา` include a Quick Reply button opening the LIFF leave form. The existing typed leave command remains supported.
+When backend `LIFF_APP_ID` is configured, `เมนู` and `ขอลา` include a Quick Reply button opening the LIFF leave form. The existing typed leave command remains supported.
 
 LINE webhook verifies the signature and schedules bounded, concurrent background processing after sending HTTP 200. A failed event does not fail the batch. Redis suppresses duplicate completed events for 24 hours; leave submissions also keep their database idempotency keys. Background tasks are in-process: a process crash after acknowledgement can lose pending work. Use a durable inbox/worker if crash recovery is required.
 
@@ -78,7 +78,7 @@ Policy questions search active FAQs and imported policy documents. Answers inclu
 
 Documents are limited to 10 MB, 100 PDF pages, and 200,000 extracted characters. LangChain splits text into 1,000-character chunks with 200-character overlap. Scanned or encrypted PDFs are rejected; OCR is outside this scope. Extracted text and source metadata are stored in MongoDB. The original policy file is not retained.
 
-The chatbot uses LangChain prompt and model chains with OpenAI-compatible Chat Completions. Set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`; defaults use `https://ai.psu.blue/v1` and `openai/gpt-6-luna`. Keep the key in the ignored `.env` file. Weaviate retrieves relevant policy chunks; the LangChain model summarizes those sources and includes citations. If Weaviate is unavailable, search uses at most 100 active MongoDB chunks. Without the chat key, or when the provider fails, the bot returns a short service-unavailable message with source titles instead of dumping raw documents. Normal retrieval loads FAQ keywords and the matched documents, rather than the whole document library. Archived sources are filtered out even if their vectors remain in the index.
+The chatbot uses LangChain prompt and model chains with OpenAI-compatible Chat Completions. Set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`; defaults use `https://ai.psu.blue/v1` and `openai/gpt-6-luna`. Keep the key in the ignored `.env` file. Weaviate retrieves relevant policy chunks; the LangChain model summarizes those sources and includes citations. If Weaviate is unavailable, search scans all active MongoDB chunks in batches of 100 and keeps only the top three matches in memory. This fallback has linear CPU cost in the number of chunks, but includes newly uploaded documents. Without the chat key, or when the provider fails, the bot returns a short service-unavailable message with source titles instead of dumping raw documents. Normal retrieval loads FAQ keywords and the matched documents, rather than the whole document library. Archived sources are filtered out even if their vectors remain in the index.
 
 Common email addresses, phone numbers, national ID numbers, and employee IDs are masked before external model calls. Titled Thai/English names and names in labeled fields are also masked. Unmarked names and all forms of PII are not covered; upload company policies, not personnel records.
 
@@ -94,7 +94,7 @@ LIFF must be used with a LINE account already linked to the employee. If it is n
 
 ## HR operations
 
-- Dashboard login creates a one-hour opaque Redis session in an HttpOnly, SameSite=Strict cookie. Logout revokes the server session and clears the cookie. Every backend request rechecks active status, role, and password version; frontend proxy only checks cookie presence. Redis atomically limits failed/concurrent authentication to 10 attempts per account and 60 per backend peer over 5 minutes, with HTTP 429 and Retry-After. Forwarded IP headers are not trusted by application code.
+- Dashboard login creates a one-hour opaque Redis session in an HttpOnly, SameSite=Strict cookie. Logout revokes the server session and clears the cookie. Every backend request rechecks active status, role, and password version; frontend proxy only checks cookie presence. Redis atomically reserves password attempts per account and applies progressive backoff after failures: 1, 2, 4, 8, 16, then at most 30 seconds, with HTTP 429 and Retry-After. Successful login clears the backoff; inactive counters expire after 5 minutes. Accounts do not share an IP counter, and authenticated sessions are not delayed. Password-version fingerprints use HMAC with the signing secret and a domain separator. Sessions issued before this change require login again.
 - Bootstrap Dashboard login uses `HR_USERNAME` / `HR_PASSWORD`. An Admin can set an individual password (at least 10 characters) on an HR/Admin employee record. Those users log in with their employee code. Employee roles cannot enter the Dashboard.
 - HR manages ordinary employees, policies, holidays, announcements, and leave decisions. Only Admin can manage HR/Admin records, roles, passwords, and view the audit history. Password hashes never appear in API responses.
 - Employee records can be edited, deactivated, and reactivated. DELETE and the status control both set `active=false` inside a transaction with an audit entry; neither deletes employee records, audit history, leave history, or SeaweedFS attachments. There is no permanent employee purge endpoint. Deactivation blocks LINE/LIFF and Dashboard access and preserves leave history and attachments. Employee codes and email addresses remain reserved after deactivation.
@@ -109,7 +109,7 @@ LIFF must be used with a LINE account already linked to the employee. If it is n
 
 ## Backend Testing
 
-GitHub Actions runs backend lint/format checks and tests against disposable MongoDB/Redis, plus frontend format checks, tests, type checking, and a production build. The workflow is in [checks.yml](.github/workflows/checks.yml).
+GitHub Actions runs backend lint/format checks and tests against disposable MongoDB/Redis, plus frontend format checks, a 100-character source line check, tests, type checking, and a production build. Backend Ruff enables E501 for the same line limit. The workflow is in [checks.yml](.github/workflows/checks.yml).
 
 From `backend/`:
 
@@ -133,6 +133,7 @@ Integration tests create randomly named `hr_test_*` databases and drop only thos
 bun run test
 bun run typecheck
 bun run format:check
+bun run lint:lines
 bun run build
 ```
 

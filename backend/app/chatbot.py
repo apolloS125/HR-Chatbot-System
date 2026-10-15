@@ -19,7 +19,7 @@ from .schemas import LeaveDecision
 router = APIRouter()
 LEAVE_TYPES = {"พักร้อน": "vacation", "ป่วย": "sick", "กิจ": "personal"}
 LEAVE_LABELS = {value: key for key, value in LEAVE_TYPES.items()}
-LIFF_APP_ID = os.getenv("NEXT_PUBLIC_LIFF_ID", "")
+LIFF_APP_ID = os.getenv("LIFF_APP_ID", "")
 _EVENT_LIMIT = asyncio.Semaphore(8)
 
 
@@ -216,7 +216,13 @@ async def handle_message(
             return "ช่วงวันที่ลาไม่ถูกต้อง"
 
     answer = await answer_policy(database, normalized, redis)
-    return answer or menu()
+    if answer:
+        return answer
+    response = menu()
+    not_found = "ไม่พบคำตอบในฐานข้อมูล HR กรุณาติดต่อ HR หรือเลือกบริการจากเมนู"
+    if isinstance(response, str):
+        return f"{not_found}\n\n{response}"
+    return {**response, "text": f"{not_found}\n\n{response['text']}"}
 
 
 def menu() -> str | dict:

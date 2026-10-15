@@ -125,14 +125,16 @@ export function AnswerPreview() {
       </label>
       <button
         disabled={pending}
-        className="min-h-11 rounded-lg bg-[#087747] px-4 py-2 font-semibold text-white disabled:opacity-50"
+        className={`min-h-11 rounded-lg bg-[#087747] px-4 py-2 font-semibold
+          text-white disabled:opacity-50`}
       >
         {pending ? "กำลังค้น…" : "ทดสอบคำตอบ"}
       </button>
       {(state.error || state.message) && (
         <p
           role={state.error ? "alert" : "status"}
-          className={`whitespace-pre-wrap rounded-lg bg-[#f7faf8] p-4 text-sm leading-relaxed ${state.error ? "text-red-700" : "text-[#30533e]"}`}
+          className={`whitespace-pre-wrap rounded-lg bg-[#f7faf8] p-4 text-sm
+            leading-relaxed ${state.error ? `text-red-700` : `text-[#30533e]`}`}
         >
           {state.error || state.message}
         </p>

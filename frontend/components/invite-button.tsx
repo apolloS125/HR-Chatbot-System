@@ -31,7 +31,8 @@ export function InviteButton({ employeeId }: { employeeId: string }) {
       <form action={action}>
         <input type="hidden" name="employee_id" value={employeeId} />
         <button
-          className="min-h-11 rounded-lg bg-[#e7f5ed] px-3 text-sm font-bold text-[#087747] disabled:cursor-wait disabled:opacity-60"
+          className={`min-h-11 rounded-lg bg-[#e7f5ed] px-3 text-sm font-bold
+            text-[#087747] disabled:cursor-wait disabled:opacity-60`}
           disabled={pending}
         >
           {pending ? "กำลังสร้าง…" : "ออกลิงก์ LINE"}

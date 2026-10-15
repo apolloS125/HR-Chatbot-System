@@ -4,8 +4,9 @@ import { useActionState, useEffect, useRef } from "react";
 import { createAnnouncement, type AnnouncementState } from "../app/actions";
 
 const initialState: AnnouncementState = { message: "", error: "" };
-const field =
-  "w-full min-w-0 rounded-lg border border-[#cad7ce] bg-white px-3 py-2.5 outline-none transition placeholder:text-[#96a199] focus:border-[#55b987] focus:ring-3 focus:ring-[#55b987]/20";
+const field = `w-full min-w-0 rounded-lg border border-[#cad7ce] bg-white px-3
+    py-2.5 outline-none transition placeholder:text-[#96a199]
+    focus:border-[#55b987] focus:ring-3 focus:ring-[#55b987]/20`;
 
 export function AnnouncementForm() {
   const [state, action, pending] = useActionState(createAnnouncement, initialState);
@@ -48,7 +49,9 @@ export function AnnouncementForm() {
         เมื่อกดส่ง ประกาศจะเผยแพร่และแจ้งพนักงานที่เชื่อม LINE ทันที
       </p>
       <button
-        className="min-h-10 rounded-lg bg-[#087747] px-3 font-bold text-white transition hover:bg-[#06643b] disabled:cursor-wait disabled:opacity-60"
+        className={`min-h-10 rounded-lg bg-[#087747] px-3 font-bold text-white
+          transition hover:bg-[#06643b] disabled:cursor-wait
+          disabled:opacity-60`}
         disabled={pending}
       >
         {pending ? "กำลังส่ง…" : "สร้างและส่งเข้า LINE"}

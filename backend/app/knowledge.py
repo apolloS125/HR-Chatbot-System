@@ -64,26 +64,22 @@ async def preview_answer(data: PolicyQuestion, database=Depends(db), redis=Depen
 
 
 async def answer_policy(database, question: str, redis=None) -> str | None:
-    candidates = {
-        faq["_id"]: faq
-        async for faq in database.faqs.find(
-            {"active": True, "document_id": {"$exists": False}}, {"keyword": 1}
-        ).limit(500)
-    }
-    exact = sorted(
-        (
-            item
-            for item in candidates.values()
-            if item.get("keyword") and item["keyword"].lower() in question.lower()
-        ),
-        key=lambda item: len(item["keyword"]),
-        reverse=True,
-    )
+    best_match = None
+    keywords = database.faqs.find(
+        {"active": True, "document_id": {"$exists": False}}, {"keyword": 1}
+    ).batch_size(100)
+    async for faq in keywords:
+        keyword = faq.get("keyword", "")
+        if keyword and keyword.lower() in question.lower():
+            if best_match is None or len(keyword) > len(best_match["keyword"]):
+                best_match = faq
     matches = []
-    if exact:
+    if best_match:
         matches = [
             item
-            async for item in database.faqs.find({"_id": exact[0]["_id"], "active": True}).limit(1)
+            async for item in database.faqs.find({"_id": best_match["_id"], "active": True}).limit(
+                1
+            )
         ]
     if not matches:
         async with httpx.AsyncClient(
@@ -103,14 +99,14 @@ async def answer_policy(database, question: str, redis=None) -> str | None:
                 pass
     if not matches:
         query = embed_text(question)
-        # shortcut: bound outage fallback to 100 chunks; Weaviate searches the full library.
         ranked = []
-        fallback = database.faqs.find({"active": True}).sort("_id", 1).limit(100)
+        fallback = database.faqs.find({"active": True}).batch_size(100)
         async for item in fallback:
             question_text = item.get("question", "") + " " + item["answer"]
             score = sum(a * b for a, b in zip(query, embed_text(question_text)))
             ranked.append((score, item))
-        ranked.sort(key=lambda item: item[0], reverse=True)
+            ranked.sort(key=lambda item: item[0], reverse=True)
+            del ranked[3:]
         matches = [item for score, item in ranked[:3] if score >= 0.25]
     if not matches:
         return None

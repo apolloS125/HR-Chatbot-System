@@ -32,14 +32,17 @@ export function LeaveDecisionForm({
       <button
         type="button"
         onClick={() => dialog.current?.showModal()}
-        className="min-h-11 whitespace-nowrap rounded-lg bg-[#e7f5ed] px-3 text-sm font-bold text-[#087747] hover:bg-[#d8eddf]"
+        className={`min-h-11 whitespace-nowrap rounded-lg bg-[#e7f5ed] px-3 text-sm
+          font-bold text-[#087747] hover:bg-[#d8eddf]`}
       >
         พิจารณาคำขอ
       </button>
       <dialog
         ref={dialog}
         aria-labelledby={`leave-${leave.id}`}
-        className="m-auto max-h-[90dvh] w-[min(34rem,calc(100%-2rem))] overflow-y-auto rounded-2xl border border-[#e1e9e3] bg-white p-0 text-sm shadow-2xl backdrop:bg-black/40"
+        className={`m-auto max-h-[90dvh] w-[min(34rem,calc(100%-2rem))]
+          overflow-y-auto rounded-2xl border border-[#e1e9e3] bg-white p-0
+          text-sm shadow-2xl backdrop:bg-black/40`}
       >
         <div className="flex items-center justify-between border-b border-[#edf1ee] px-5 py-4">
           <h2 id={`leave-${leave.id}`} className="m-0 text-lg font-bold">
@@ -80,7 +83,8 @@ export function LeaveDecisionForm({
               name="decision"
               value="approved"
               disabled={pending}
-              className="min-h-11 flex-1 rounded-lg bg-[#087747] px-4 font-bold text-white disabled:opacity-50"
+              className={`min-h-11 flex-1 rounded-lg bg-[#087747] px-4 font-bold text-white
+                disabled:opacity-50`}
             >
               อนุมัติ
             </button>
@@ -88,7 +92,8 @@ export function LeaveDecisionForm({
               name="decision"
               value="rejected"
               disabled={pending}
-              className="min-h-11 flex-1 rounded-lg bg-[#f8eded] px-4 font-bold text-[#a32727] disabled:opacity-50"
+              className={`min-h-11 flex-1 rounded-lg bg-[#f8eded] px-4 font-bold
+                text-[#a32727] disabled:opacity-50`}
             >
               ปฏิเสธ
             </button>

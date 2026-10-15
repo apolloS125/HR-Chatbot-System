@@ -33,7 +33,7 @@ def mock_http(monkeypatch, handler):
 class CursorResults:
     def __init__(self, results):
         self.results = results
-        self.count = 500
+        self.count = None
 
     def limit(self, count):
         self.count = count
@@ -42,11 +42,15 @@ class CursorResults:
     def sort(self, *_):
         return self
 
+    def batch_size(self, count):
+        assert count == 100
+        return self
+
     def __aiter__(self):
         async def rows():
             count = 0
             async for row in self.results():
-                if count >= self.count:
+                if self.count is not None and count >= self.count:
                     break
                 yield row
                 count += 1
@@ -605,3 +609,49 @@ def test_menu_has_liff_quick_reply(monkeypatch):
     message = chatbot.menu()
     action = message["quickReply"]["items"][-1]["action"]
     assert action == {"type": "uri", "label": "ขอลา", "uri": "https://liff.line.me/test-liff"}
+
+
+@pytest.mark.parametrize("liff_id", ["", "test-liff"])
+def test_missing_policy_answer_is_explicit_and_preserves_menu(monkeypatch, liff_id):
+    monkeypatch.setattr(chatbot, "LIFF_APP_ID", liff_id)
+    monkeypatch.setattr(chatbot, "check_guardrail", AsyncMock(return_value=None))
+    monkeypatch.setattr(chatbot, "classify_intent", AsyncMock(return_value="policy"))
+    monkeypatch.setattr(chatbot, "answer_policy", AsyncMock(return_value=None))
+    database = SimpleNamespace(
+        employees=SimpleNamespace(find_one=AsyncMock(return_value={"_id": "E001"}))
+    )
+    response = asyncio.run(chatbot.handle_message(database, "U123", "คำถามที่ไม่มีคำตอบ"))
+    text = response if isinstance(response, str) else response["text"]
+    assert "ไม่พบคำตอบในฐานข้อมูล HR" in text
+    assert "เมนู HR" in text
+    if liff_id:
+        assert response["quickReply"] == chatbot.menu()["quickReply"]
+
+
+def test_weaviate_outage_searches_chunks_beyond_first_batch(monkeypatch):
+    question = "สิทธิ์ลาหยุดเพื่อรับปริญญา"
+    scanned = []
+
+    class Faqs:
+        def find(self, query, projection=None):
+            async def results():
+                if projection:
+                    return
+                for index in range(750):
+                    scanned.append(index)
+                    yield {"_id": str(index), "question": "other", "answer": "other"}
+                yield {"_id": "new", "answer": question, "source": "new-policy.pdf"}
+
+            return CursorResults(results)
+
+    async def answer(_, context, **kwargs):
+        assert question in context
+        return "สรุปสิทธิ์ลา"
+
+    monkeypatch.setattr(
+        knowledge, "search_policy", AsyncMock(side_effect=httpx.ConnectError("offline"))
+    )
+    monkeypatch.setattr(knowledge, "_llm", answer)
+    result = asyncio.run(knowledge.answer_policy(SimpleNamespace(faqs=Faqs()), question))
+    assert "new-policy.pdf" in result
+    assert len(scanned) == 750

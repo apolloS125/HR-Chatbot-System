@@ -145,6 +145,14 @@ def check_password(password: str, stored: str) -> bool:
         return False
 
 
+def credential_version(value: str) -> str:
+    return hmac.new(
+        LIFF_SESSION_SECRET.encode(),
+        f"dashboard-credential-version:{value}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 async def authenticate_admin(
     authorization: str | None,
     x_admin_key: str | None,
@@ -160,13 +168,18 @@ async def authenticate_admin(
             raise HTTPException(status_code=401, detail="session expired")
         session = json.loads(stored)
         if session["bootstrap"]:
-            if session["version"] == sha256(HR_PASSWORD) and session["id"] == HR_USERNAME:
+            if (
+                hmac.compare_digest(session["version"], credential_version(HR_PASSWORD))
+                and session["id"] == HR_USERNAME
+            ):
                 return {"id": HR_USERNAME, "role": "admin", "bootstrap": True}
         else:
             employee = await database.employees.find_one(
                 {"_id": session["id"], "active": True, "role": {"$in": ["hr", "admin"]}}
             )
-            if employee and session["version"] == sha256(employee.get("password_hash", "")):
+            if employee and hmac.compare_digest(
+                session["version"], credential_version(employee.get("password_hash", ""))
+            ):
                 return {"id": employee["_id"], "role": employee["role"]}
         raise HTTPException(status_code=401, detail="session expired")
     if authorization and authorization.startswith("Basic "):
@@ -202,54 +215,54 @@ async def authenticate_admin(
 
 
 _RESERVE_LOGIN = """
-local ip = tonumber(redis.call('GET', KEYS[1]) or '0')
-local account = tonumber(redis.call('GET', KEYS[2]) or '0')
-if ip >= 60 or account >= 10 then return 0 end
-for _, key in ipairs(KEYS) do
-    if redis.call('INCR', key) == 1 then redis.call('EXPIRE', key, 300) end
-end
-return 1
+local clock = redis.call('TIME')
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local next_at = tonumber(redis.call('HGET', KEYS[1], 'next_at') or '0')
+if next_at > now then return math.ceil((next_at - now) / 1000) end
+redis.call('HSET', KEYS[1], 'next_at', now + 30000)
+redis.call('EXPIRE', KEYS[1], 300)
+return 0
 """
-_RELEASE_LOGIN = """
-for _, key in ipairs(KEYS) do
-    if tonumber(redis.call('GET', key) or '0') > 0 then redis.call('DECR', key) end
-end
-return 1
+_FAIL_LOGIN = """
+local failures = redis.call('HINCRBY', KEYS[1], 'failures', 1)
+local delay = math.min(2 ^ math.min(failures - 1, 5), 30)
+local clock = redis.call('TIME')
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+redis.call('HSET', KEYS[1], 'next_at', now + delay * 1000)
+redis.call('EXPIRE', KEYS[1], 300)
+return delay
 """
 
 
 async def require_admin(
-    request: Request,
     x_admin_key: Annotated[str | None, Header()] = None,
     authorization: Annotated[str | None, Header()] = None,
     database=Depends(db),
     redis=Depends(cache),
 ):
-    peer = request.client.host if request.client else "unknown"
-    account = f"anonymous:{peer}"
     if authorization and len(authorization) > 12000:
         raise HTTPException(status_code=401, detail="invalid credentials")
-    if authorization and authorization.startswith("Bearer "):
-        account = f"session:{sha256(authorization[7:])}"
-    elif x_admin_key:
-        account = f"api-key:{sha256(x_admin_key)}"
-    elif authorization and authorization.startswith("Basic "):
-        try:
-            account = (
-                base64.b64decode(authorization[6:], validate=True).decode().split(":", 1)[0].upper()
-            )
-        except (ValueError, UnicodeDecodeError):
-            pass
-    keys = (f"login-ip:{sha256(peer)}", f"login-account:{sha256(account)}")
     try:
-        if not await redis.eval(_RESERVE_LOGIN, 2, *keys):
+        if not authorization or not authorization.startswith("Basic "):
+            return await authenticate_admin(authorization, x_admin_key, database, redis)
+        try:
+            username = base64.b64decode(authorization[6:], validate=True).decode().split(":", 1)[0]
+        except (ValueError, UnicodeDecodeError) as error:
+            raise HTTPException(status_code=401, detail="invalid credentials") from error
+        key = f"login-backoff:{sha256(username.upper())}"
+        retry_after = await redis.eval(_RESERVE_LOGIN, 1, key)
+        if retry_after:
             raise HTTPException(
                 status_code=429,
-                detail="Too many login attempts; try again in 5 minutes",
-                headers={"Retry-After": "300"},
+                detail="Too many login attempts; retry after the indicated delay",
+                headers={"Retry-After": str(retry_after)},
             )
-        actor = await authenticate_admin(authorization, x_admin_key, database, redis)
-        await redis.eval(_RELEASE_LOGIN, 2, *keys)
+        try:
+            actor = await authenticate_admin(authorization, x_admin_key, database, redis)
+        except HTTPException:
+            await redis.eval(_FAIL_LOGIN, 1, key)
+            raise
+        await redis.delete(key)
         return actor
     except RedisError as error:
         raise HTTPException(status_code=503, detail="Authentication unavailable") from error
@@ -262,7 +275,7 @@ async def create_dashboard_session(actor, database, redis) -> str:
     employee = None if bootstrap else await database.employees.find_one({"_id": actor["id"]})
     version = HR_PASSWORD if bootstrap else employee.get("password_hash", "")
     token = secrets.token_urlsafe(32)
-    value = {"id": actor["id"], "bootstrap": bootstrap, "version": sha256(version)}
+    value = {"id": actor["id"], "bootstrap": bootstrap, "version": credential_version(version)}
     await redis.set(f"dashboard-session:{sha256(token)}", json.dumps(value), ex=3600)
     return token
 

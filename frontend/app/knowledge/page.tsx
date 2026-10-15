@@ -15,7 +15,10 @@ export default async function KnowledgePage() {
   ]);
 
   return (
-    <main className="mx-auto w-[calc(100%-3rem)] max-w-[1240px] py-10 max-md:w-[calc(100%-1.75rem)] max-md:py-7">
+    <main
+      className={`mx-auto w-[calc(100%-3rem)] max-w-[1240px] py-10
+      max-md:w-[calc(100%-1.75rem)] max-md:py-7`}
+    >
       <header className="mb-7">
         <h1 className="mb-2 text-3xl font-bold">FAQ และเอกสารบริษัท</h1>
         <p className="text-sm leading-relaxed text-[#6d7a72]">
@@ -47,7 +50,8 @@ export default async function KnowledgePage() {
         <ul>
           {documents.map((item) => (
             <li
-              className="flex flex-wrap items-center justify-between gap-3 border-b border-[#edf1ee] p-5 last:border-0"
+              className={`flex flex-wrap items-center justify-between gap-3 border-b
+                border-[#edf1ee] p-5 last:border-0`}
               key={item.id}
             >
               <span className="min-w-0 break-words font-medium">{item.name}</span>
@@ -78,7 +82,10 @@ export default async function KnowledgePage() {
           </details>
         ))}
         {!faqs.length && (
-          <p className="rounded-2xl border border-[#e1e9e3] bg-white p-8 text-center text-sm text-[#6d7a72]">
+          <p
+            className={`rounded-2xl border border-[#e1e9e3] bg-white p-8 text-center
+            text-sm text-[#6d7a72]`}
+          >
             ยังไม่มี FAQ เริ่มจากเพิ่มคำถามที่พนักงานถามบ่อย
           </p>
         )}
